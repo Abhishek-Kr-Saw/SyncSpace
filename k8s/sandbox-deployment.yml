@@ -40,6 +40,6 @@ spec:
           timeoutSeconds: 10
                
         ports:
-        - containerPort:  5000
+        - containerPort:  3000
           name:  sandbox-port
       

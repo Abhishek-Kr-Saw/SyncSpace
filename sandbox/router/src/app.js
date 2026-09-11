@@ -8,7 +8,7 @@ const app = express();
 app.use(morgan('dev'));
 
 
-app.get('/api/status/healtz', (req,res) => {
+app.get('/api/status/healthz', (req,res) => {
     res.status(200).json({ status: 'ok' })
 })
 
@@ -17,6 +17,7 @@ app.get('/api/status/readyz', (req,res) => {
 })
 
 const proxies = {}
+const agentProxies = {}
 
 function getProxies(sandboxId){
 
@@ -33,12 +34,31 @@ function getProxies(sandboxId){
     return proxies[ sandboxId ]
 }
 
+function getAgentProxies(sandboxId){
+
+    const target = `http://sandbox-service-${sandboxId}:3000`; 
+
+    if (!agentProxies[sandboxId]){
+        agentProxies[ sandboxId ] = createProxyMiddleware({
+            target,
+            changeOrigin: true,
+            ws: true
+        })
+    }
+
+    return agentProxies[ sandboxId ]
+}
+
 
 app.use((req,res,next) => {
     const host = req.headers.host;
     const sandboxId = host.split('.')[0];
 
-    return getProxies(sandboxId)(req,res,next);
+    if(host.split('.')[1] === 'agent'){
+        return getAgentProxies(sandboxId)(req,res,next);
+    }else if(host.split('.')[1] === 'preview'){
+        return getProxies(sandboxId)(req,res,next);
+    }
 })
 
 
