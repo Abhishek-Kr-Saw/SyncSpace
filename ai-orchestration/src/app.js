@@ -1,4 +1,5 @@
 import express from 'express';
+import agentRouter from './routes/agent.routes.js';
 import morgan from 'morgan';
 
 const app = express();
@@ -12,12 +13,8 @@ app.get('/api/status/healthz',(req,res) => {
     res.status(200).json({ status: 'ok' })
 })
 
-//Routes
-app.get('/api/ai/healthz', (req,res) => {
-    return res.status(200).json({
-        message:"AI orchestration is fine",
-        status:'ok'
-    })
-})
+//agentRouter
+app.use('/api/ai', agentRouter)
+
 
 export default app;

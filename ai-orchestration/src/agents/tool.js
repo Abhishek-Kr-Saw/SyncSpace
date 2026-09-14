@@ -1,5 +1,5 @@
 import axios from "axios";
-import { tool } from "langchain";
+import { tool } from "@langchain/core/tools";
 import * as z from "zod";
 
 // Per-process cache: resets on each `node code.agent.js` run
@@ -12,7 +12,7 @@ export const listFiles = tool(
         console.log("List files tool is used")
         console.log("--------------------------------------")
 
-        const response = await axios.get("http://01a09993-d30d-7151-b276-4793c39f49dd.agent.localhost/list-files")
+        const response = await axios.get("http://sandbox-service-01a09f11-2b1d-7378-b41a-eb2cfbecce33:3000/list-files")
 
         console.log("--------------------------------------")
         console.log("Response from list files", response.data.files)
@@ -47,7 +47,7 @@ export const readFiles = tool(
 
         // Only fetch files we haven't read yet
         if (uncachedFiles.length > 0) {
-            const response = await axios.get("http://01a09993-d30d-7151-b276-4793c39f49dd.agent.localhost/read-files?files=" + uncachedFiles.join(','));
+            const response = await axios.get("http://sandbox-service-01a09f11-2b1d-7378-b41a-eb2cfbecce33:3000/read-files?files=" + uncachedFiles.join(','));
 
             // Cache the new results and merge
             for (const fileObj of response.data.files) {
@@ -81,7 +81,7 @@ export const updateFiles = tool(
         console.log("Update files tool is used", files)
         console.log("--------------------------------------")
 
-        const response = await axios.patch("http://01a09993-d30d-7151-b276-4793c39f49dd.agent.localhost/update-files", {files})
+        const response = await axios.patch("http://sandbox-service-01a09f11-2b1d-7378-b41a-eb2cfbecce33:3000/update-files", {files})
 
 
         console.log("--------------------------------------")
