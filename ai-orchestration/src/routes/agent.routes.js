@@ -5,21 +5,38 @@ const agentRouter = Router();
 
 agentRouter.post('/invoke', async(req,res) => {
     try{
-        const { message } = req.body;
+        const { message, projectId } = req.body;
 
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ error: "Request body must include a 'message' string" });
         }
 
-        const result = await runAgent(message);
+        if (!projectId || typeof projectId !== 'string') {
+            return res.status(400).json({ error: "Request body must include a 'projectId' string" });
+        }
 
-        const finalMessage = result.messages?.[result.messages.length - 1];
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
 
-        res.json({ response: finalMessage?.content ?? result });
-        
+        const stream = await runAgent(message, projectId); // now returns the agent's stream iterator
+
+        for await (const chunk of stream) {
+            res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        }
+
+        res.write('event: done\ndata: {}\n\n');
+        res.end();
+            
     }catch(error){
-        console.log("Error invoking agent : ", error)
-        res.status(500).json({ error: "Failed to invoke agent"})
+        console.log("Error invoking agent : ", error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Failed to invoke agent" });
+        } else {
+            res.write(`event: error\ndata: ${JSON.stringify({ error: "Failed to invoke agent" })}\n\n`);
+            res.end();
+        }
     }
 })
 

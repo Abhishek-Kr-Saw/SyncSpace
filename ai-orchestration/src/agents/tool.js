@@ -2,22 +2,18 @@ import axios from "axios";
 import { tool } from "@langchain/core/tools";
 import * as z from "zod";
 
-// Per-process cache: resets on each `node code.agent.js` run
 const readCache = new Map();
 
 export const listFiles = tool(
-    async({ }) => {
+    async({ }, config) => {
 
-        console.log("--------------------------------------")
-        console.log("List files tool is used")
-        console.log("--------------------------------------")
+        const writer = config.writer;
+        writer?.("Listing files in project directory...\n");
 
-        const response = await axios.get("http://sandbox-service-01a09f11-2b1d-7378-b41a-eb2cfbecce33:3000/list-files")
+        const projectId = config.configurable?.projectId;
+        const response = await axios.get(`http://sandbox-service-${projectId}:3000/list-files`)
 
-        console.log("--------------------------------------")
-        console.log("Response from list files", response.data.files)
-        console.log("--------------------------------------")
-
+        writer?.("Files listed successfully." + "Files: " + response.data.files.join(",") + "\n");
         return JSON.stringify(response.data.files);
     },
     {
@@ -29,11 +25,10 @@ export const listFiles = tool(
 
 
 export const readFiles = tool(
-    async ({ files }) => {
+    async ({ files }, config) => {
 
-        console.log("--------------------------------------")
-        console.log("Read files tool is used", files)
-        console.log("--------------------------------------")
+        const writer = config.writer;
+        writer?.("Reading files from project directory..." + files.join(",") + "\n");
 
         const uncachedFiles = files.filter(f => !readCache.has(f));
         const results = {};
@@ -47,7 +42,8 @@ export const readFiles = tool(
 
         // Only fetch files we haven't read yet
         if (uncachedFiles.length > 0) {
-            const response = await axios.get("http://sandbox-service-01a09f11-2b1d-7378-b41a-eb2cfbecce33:3000/read-files?files=" + uncachedFiles.join(','));
+            const projectId = config.configurable?.projectId;
+            const response = await axios.get(`http://sandbox-service-${projectId}:3000/read-files?files=` + uncachedFiles.join(','));
 
             // Cache the new results and merge
             for (const fileObj of response.data.files) {
@@ -57,11 +53,7 @@ export const readFiles = tool(
                 }
             }
         }
-
-        console.log("--------------------------------------")
-        console.log(`Read files: ${uncachedFiles.length} fetched, ${files.length - uncachedFiles.length} cached`)
-        console.log("--------------------------------------")
-
+        writer?.("Files read successfully.\n");
         return JSON.stringify({ message: "File contents", files: results });
     },
     {
@@ -75,18 +67,15 @@ export const readFiles = tool(
 
 
 export const updateFiles = tool(
-    async ({ files }) => {
+    async ({ files }, config) => {
 
-        console.log("--------------------------------------")
-        console.log("Update files tool is used", files)
-        console.log("--------------------------------------")
+        const writer = config.writer;
+        writer?.("Updating files in project directory..." + files.map(f => f.file).join(",") + "\n");
 
-        const response = await axios.patch("http://sandbox-service-01a09f11-2b1d-7378-b41a-eb2cfbecce33:3000/update-files", {files})
+        const projectId = config.configurable?.projectId;
+        const response = await axios.patch(`http://sandbox-service-${projectId}:3000/update-files`, {files})
 
-
-        console.log("--------------------------------------")
-        console.log("Response from update files", response.data)
-        console.log("--------------------------------------")
+        writer?.("Files updated successfully.\n");
 
         return JSON.stringify(response.data);
     },

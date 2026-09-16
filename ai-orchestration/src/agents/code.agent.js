@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { ChatGroq } from "@langchain/groq";
+// import { ChatMistralAI } from "@langchain/mistralai";
 import { listFiles, readFiles, updateFiles } from "./tool.js";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { MemorySaver } from "@langchain/langgraph";
@@ -9,6 +10,13 @@ const model = new ChatGroq({
     apiKey: process.env.GROQ_API_KEY,
     temperature: 0,
 })
+
+// const model = new ChatMistralAI({
+//     model: "mistral-small-latest",
+//     apiKey: process.env.MISTRAL_API_KEY,
+//     temperature: 0,
+// })
+
 
 // In-memory checkpointer — saves agent state after each successful step.
 // On 429 retry, the agent resumes from the last checkpoint instead of
@@ -124,12 +132,14 @@ async function invokeWithRetry(agent, input, config, maxRetries = 3) {
 }
 
 
-export async function runAgent(userMessage) {
-    const threadId = `task-${Date.now()}`;
-    return invokeWithRetry(
-        agent,
+export async function runAgent(userMessage, projectId) {
+    const threadId = `task-${projectId}-${Date.now()}`;
+    return agent.stream(
         { messages: [{ role: "user", content: userMessage }] },
-        { configurable: { thread_id: threadId } }
+        {
+            configurable: { thread_id: threadId, projectId },
+            streamMode: ["custom", "messages"],
+        }
     );
 }
 
