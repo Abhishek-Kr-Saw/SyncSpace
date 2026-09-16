@@ -30,12 +30,16 @@ export const readFiles = tool(
         const writer = config.writer;
         writer?.("Reading files from project directory..." + files.join(",") + "\n");
 
-        const uncachedFiles = files.filter(f => !readCache.has(f));
+        // Scope cache by thread_id so different projects don't collide
+        const threadId = config.configurable?.thread_id || '';
+        const scopedKey = (f) => `${threadId}:${f}`;
+
+        const uncachedFiles = files.filter(f => !readCache.has(scopedKey(f)));
         const results = {};
 
         // Return cached placeholder for already-read files
         for (const f of files) {
-            if (readCache.has(f)) {
+            if (readCache.has(scopedKey(f))) {
                 results[f] = "(already provided earlier in this conversation)";
             }
         }
@@ -48,7 +52,7 @@ export const readFiles = tool(
             // Cache the new results and merge
             for (const fileObj of response.data.files) {
                 for (const [filePath, content] of Object.entries(fileObj)) {
-                    readCache.set(filePath, true);
+                    readCache.set(scopedKey(filePath), true);
                     results[filePath] = content;
                 }
             }

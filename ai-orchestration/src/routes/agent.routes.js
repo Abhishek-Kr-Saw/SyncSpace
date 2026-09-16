@@ -18,16 +18,24 @@ agentRouter.post('/invoke', async(req,res) => {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
+
+        // Abort streaming when client disconnects to save API tokens
+        let clientDisconnected = false;
+        req.on('close', () => { clientDisconnected = true; });
 
         const stream = await runAgent(message, projectId); // now returns the agent's stream iterator
 
         for await (const chunk of stream) {
+            if (clientDisconnected) break;
             res.write(`data: ${JSON.stringify(chunk)}\n\n`);
         }
 
-        res.write('event: done\ndata: {}\n\n');
-        res.end();
+        if (!clientDisconnected) {
+            res.write('event: done\ndata: {}\n\n');
+            res.end();
+        }
             
     }catch(error){
         console.log("Error invoking agent : ", error);
