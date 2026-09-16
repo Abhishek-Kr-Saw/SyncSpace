@@ -1,16 +1,83 @@
 import express from 'express';
 import morgan from "morgan";
 import fs from 'fs';
-import path from 'path'
+import path from 'path';
+import { Server } from 'socket.io';
+import http from 'http';
+import pty from 'node-pty';
+import cors from 'cors';
+import os from 'os';
 
 const WORKING_DIR = '/workspace'
 
 const app = express();
+const httpServer = http.createServer(app);
 
 app.use(morgan('dev'));
+app.use(cors({
+    methods: [ "GET", "POST", "PATCH", "DELETE" ],
+    origin: "*",
+}));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }))
+
+
+const io = new Server(httpServer, {
+    cors: {
+        origin: "*",
+        methods: [ "GET", "POST", "PATCH" ],
+    }
+})
+
+
+const shell = process.env.SHELL || 'bash';
+
+// Output buffer to preserve recent terminal output for new client connections
+const MAX_BUFFER_SIZE = 64 * 1024; // 64 KB
+let outputBuffer = '';
+
+function appendToBuffer(data) {
+    outputBuffer += data;
+    if (outputBuffer.length > MAX_BUFFER_SIZE) {
+        outputBuffer = outputBuffer.slice(outputBuffer.length - MAX_BUFFER_SIZE);
+    }
+}
+
+let ptyProcess = null;
+
+function initPty() {
+    try {
+        ptyProcess = pty.spawn(shell, [], {
+            name: 'xterm-color',
+            cols: 80,
+            rows: 30,
+            cwd: WORKING_DIR,
+            env: {
+                ...process.env,
+                TERM: 'xterm-256color',
+                COLORTERM: 'truecolor'
+            }
+        });
+
+        ptyProcess.onData((data) => {
+            appendToBuffer(data);
+            io.emit('terminal-output', data);
+        });
+
+        ptyProcess.onExit(({ exitCode, signal }) => {
+            console.log(`PTY process exited with code: ${exitCode}, signal: ${signal}`);
+            ptyProcess = null;
+            io.emit('terminal-output', '\r\n\x1b[33m[Session ended. Restarting shell...]\x1b[0m\r\n');
+            initPty();
+        });
+    } catch (err) {
+        console.error("Failed to spawn PTY process:", err);
+    }
+}
+
+// Spawn initial PTY process
+initPty();
 
 app.get('/', (req, res) => {
     res.status(200).json({
@@ -18,6 +85,41 @@ app.get('/', (req, res) => {
         status: 'success'
     })
 })
+
+io.on("connection", (socket) => {
+    console.log("Client connected: " + socket.id);
+
+    // Replay terminal buffer to newly connected client
+    if (outputBuffer) {
+        socket.emit("terminal-output", outputBuffer);
+    }
+
+    socket.on("terminal-input", (data) => {
+        if (!ptyProcess) {
+            initPty();
+        }
+        try {
+            ptyProcess?.write(data);
+        } catch (err) {
+            console.error("Error writing to PTY:", err);
+        }
+    });
+
+    socket.on("terminal-resize", ({ cols, rows }) => {
+        if (ptyProcess && typeof cols === 'number' && typeof rows === 'number' && cols > 0 && rows > 0) {
+            try {
+                ptyProcess.resize(cols, rows);
+            } catch (err) {
+                console.error("Error resizing PTY:", err);
+            }
+        }
+    });
+
+    socket.on("disconnect", () => {
+        console.log("Client disconnected: " + socket.id);
+    });
+})
+
 
 
 /**
@@ -190,4 +292,4 @@ app.post("/create-files", async (req, res) => {
     });
 })
 
-export default app;
+export default httpServer;
