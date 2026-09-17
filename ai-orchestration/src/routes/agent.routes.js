@@ -27,9 +27,18 @@ agentRouter.post('/invoke', async(req,res) => {
 
         const stream = await runAgent(message, projectId); // now returns the agent's stream iterator
 
-        for await (const chunk of stream) {
+        for await (const [mode, payload] of stream) {
+            
             if (clientDisconnected) break;
-            res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+
+            if (mode === "custom") {
+                res.write(`event: tool\ndata: ${JSON.stringify(payload)}\n\n`);
+            } else if (mode === "messages") {
+                const [messageChunk] = payload;
+                if (messageChunk?.content) {
+                    res.write(`event: message\ndata: ${JSON.stringify({ content: messageChunk.content })}\n\n`);
+                }
+            }
         }
 
         if (!clientDisconnected) {

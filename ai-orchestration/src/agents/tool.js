@@ -8,12 +8,12 @@ export const listFiles = tool(
     async({ }, config) => {
 
         const writer = config.writer;
-        writer?.("Listing files in project directory...\n");
+        writer?.({ type: "tool_call", tool: "list_files", status: "start" });
 
         const projectId = config.configurable?.projectId;
         const response = await axios.get(`http://sandbox-service-${projectId}:3000/list-files`)
 
-        writer?.("Files listed successfully." + "Files: " + response.data.files.join(",") + "\n");
+        writer?.({ type: "tool_call", tool: "list_files", status: "end", files: response.data.files });
         return JSON.stringify(response.data.files);
     },
     {
@@ -28,7 +28,7 @@ export const readFiles = tool(
     async ({ files }, config) => {
 
         const writer = config.writer;
-        writer?.("Reading files from project directory..." + files.join(",") + "\n");
+        writer?.({ type: "tool_call", tool: "read_files", status: "start", files });
 
         // Scope cache by thread_id so different projects don't collide
         const threadId = config.configurable?.thread_id || '';
@@ -57,7 +57,7 @@ export const readFiles = tool(
                 }
             }
         }
-        writer?.("Files read successfully.\n");
+        writer?.({ type: "tool_call", tool: "read_files", status: "end", files });
         return JSON.stringify({ message: "File contents", files: results });
     },
     {
@@ -74,12 +74,12 @@ export const updateFiles = tool(
     async ({ files }, config) => {
 
         const writer = config.writer;
-        writer?.("Updating files in project directory..." + files.map(f => f.file).join(",") + "\n");
+        writer?.({ type: "tool_call", tool: "update_files", status: "start", files: fileNames });
 
         const projectId = config.configurable?.projectId;
         const response = await axios.patch(`http://sandbox-service-${projectId}:3000/update-files`, {files})
 
-        writer?.("Files updated successfully.\n");
+        writer?.({ type: "tool_call", tool: "update_files", status: "end", files: fileNames });
 
         return JSON.stringify(response.data);
     },
