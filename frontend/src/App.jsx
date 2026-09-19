@@ -1,122 +1,111 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState, useCallback, useEffect } from 'react';
+import { SandboxProvider, useSandbox } from './context/SandboxContext.jsx';
+import { loadSession, clearSession } from './utils/session.js';
+import LandingScreen from './components/LandingScreen.jsx';
+import LoadingScreen from './components/LoadingScreen.jsx';
+import IDELayout from './components/IDELayout.jsx';
+import { getAgentUrl } from './config.js';
+import './index.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+/**
+ * App states:
+ *   'landing'   → no sandbox yet, show New Project button
+ *   'loading'   → sandbox is booting, show calm loading screen
+ *   'restoring' → probing sessionStorage session liveness (brief spinner)
+ *   'ide'       → sandbox ready, show the full IDE
+ */
+function AppContent() {
+  // Initialize state based on whether we have a saved session to probe.
+  // This avoids calling setAppState synchronously inside an effect.
+  const [appState, setAppState] = useState(() =>
+    loadSession() ? 'restoring' : 'landing'
+  );
+  const { setSandbox } = useSandbox();
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+  // On mount: if we are in 'restoring', probe the agent to confirm liveness.
+  useEffect(() => {
+    if (appState !== 'restoring') return;
+
+    const saved = loadSession();
+    if (!saved) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAppState('landing');
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    // Quick fetch to see if the agent pod is still running
+    fetch(`${getAgentUrl(saved.sandboxId)}/`, { signal: controller.signal })
+      .then((res) => {
+        clearTimeout(timeout);
+        if (res.ok) {
+          setSandbox(saved.sandboxId, saved.previewUrl);
+          setAppState('ide');
+        } else {
+          clearSession();
+          setAppState('landing');
+        }
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+        clearSession();
+        setAppState('landing');
+      });
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeout);
+    };
+  // Only run on mount — appState is 'restoring' only at startup
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleStartLoading = useCallback((show = true) => {
+    setAppState(show ? 'loading' : 'landing');
+  }, []);
+
+  const handleSandboxReady = useCallback((newSandboxId, previewUrl) => {
+    setSandbox(newSandboxId, previewUrl);
+    setAppState('ide');
+  }, [setSandbox]);
+
+  switch (appState) {
+    case 'restoring':
+      return (
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'var(--bg-primary)',
+          }}
         >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          <span className="loading-dot" style={{ animationDelay: '0ms' }} />
+          <span className="loading-dot" style={{ animationDelay: '200ms', marginLeft: 6 }} />
+          <span className="loading-dot" style={{ animationDelay: '400ms', marginLeft: 6 }} />
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2 className="text-red-500">Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      );
+    case 'loading':
+      return <LoadingScreen />;
+    case 'ide':
+      return <IDELayout />;
+    default:
+      return (
+        <LandingScreen
+          onStartLoading={handleStartLoading}
+          onSandboxReady={handleSandboxReady}
+        />
+      );
+  }
 }
 
-export default App
+export default function App() {
+  return (
+    <SandboxProvider>
+      <AppContent />
+    </SandboxProvider>
+  );
+}

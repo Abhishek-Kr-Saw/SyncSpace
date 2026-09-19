@@ -74,6 +74,7 @@ export const updateFiles = tool(
     async ({ files }, config) => {
 
         const writer = config.writer;
+        const fileNames = files.map(f => f.file);
         writer?.({ type: "tool_call", tool: "update_files", status: "start", files: fileNames });
 
         const projectId = config.configurable?.projectId;

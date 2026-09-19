@@ -18,11 +18,24 @@ metadata:
     # Disable response buffering so SSE chunks are forwarded immediately
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
 
+    # ── TLS / cert-manager (enable when cert-manager is installed) ────────────
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
   labels:
     app.kubernetes.io/name: syncspace-ingress
+
 spec:
   ingressClassName: nginx
+
+  # ── TLS (uncomment and set your domain when cert-manager is ready) ──────────
+  # tls:
+  #   - hosts:
+  #       - syncspace.example.com
+  #     secretName: syncspace-tls
+
   rules:
+
+  # ── API: Sandbox provisioning ─────────────────────────────────────────────
   - http:
       paths:
       - pathType: Prefix
@@ -30,9 +43,10 @@ spec:
         backend:
           service:
             name: sandbox-service
-            port: 
+            port:
               number: 80
 
+  # ── API: AI agent invocation ──────────────────────────────────────────────
   - http:
       paths:
       - pathType: Prefix
@@ -40,12 +54,10 @@ spec:
         backend:
           service:
             name: ai-service
-            port: 
+            port:
               number: 80
-  
 
-
-              
+  # ── Sandbox preview subdomains — *.preview.<domain> ──────────────────────
   - host: "*.preview.localhost"
     http:
       paths:
@@ -54,10 +66,10 @@ spec:
         backend:
           service:
             name: router-service
-            port: 
+            port:
               number: 80
 
-
+  # ── Sandbox agent subdomains — *.agent.<domain> ───────────────────────────
   - host: "*.agent.localhost"
     http:
       paths:
@@ -66,7 +78,33 @@ spec:
         backend:
           service:
             name: router-service
-            port: 
+            port:
               number: 80
 
-  
+  # ── Frontend SPA — catch-all for root domain ──────────────────────────────
+  # This rule must come LAST; more-specific paths above take priority.
+  #
+  # For a real domain, change the host to e.g. "syncspace.example.com"
+  # and remove/comment the pathType: Prefix rule below, replacing it with:
+  #
+  #   - host: "syncspace.example.com"
+  #     http:
+  #       paths:
+  #       - pathType: Prefix
+  #         path: "/"
+  #         backend:
+  #           service:
+  #             name: frontend-service
+  #             port:
+  #               number: 80
+  #
+  # For local dev with no domain, use the pathType rule:
+  - http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80

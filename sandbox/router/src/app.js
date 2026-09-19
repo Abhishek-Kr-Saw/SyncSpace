@@ -67,6 +67,8 @@ app.use((req, res, next) => {
     const sandboxId = parts[0];
     const type = parts[1];
 
+    console.log(`WS upgrade request: ${host}, sandboxId: ${sandboxId}, type: ${type}`);
+
     if (type === 'agent') {
         return getAgentProxies(sandboxId)(req, res, next);
     } else if (type === 'preview') {
