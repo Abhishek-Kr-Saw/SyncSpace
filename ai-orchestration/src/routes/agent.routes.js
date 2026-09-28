@@ -1,11 +1,27 @@
 import { Router } from 'express';
-import { runAgent } from '../agents/code.agent.js';
+import { runAgent, listAvailableModels, DEFAULT_MODEL } from '../agents/code.agent.js';
 
 const agentRouter = Router();
 
+// Short, key-safe description of a provider error, e.g. "429: Too Many Requests"
+function describeError(err) {
+    const status = err?.status ?? err?.response?.status;
+    const msg = String(err?.message || err)
+        .replace(/key=[^&\s"']+/gi, 'key=***')   // never echo API keys
+        .replace(/\s+/g, ' ')
+        .slice(0, 300);
+    return status ? `${status}: ${msg}` : msg;
+}
+
+// Models the frontend can offer (only those whose API key is configured)
+agentRouter.get('/models', (req, res) => {
+    res.json({ models: listAvailableModels(), default: DEFAULT_MODEL });
+});
+
+
 agentRouter.post('/invoke', async(req,res) => {
     try{
-        const { message, projectId } = req.body;
+        const { message, projectId, model } = req.body;
 
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ error: "Request body must include a 'message' string" });
@@ -14,6 +30,15 @@ agentRouter.post('/invoke', async(req,res) => {
         if (!projectId || typeof projectId !== 'string') {
             return res.status(400).json({ error: "Request body must include a 'projectId' string" });
         }
+
+
+        // Validate against the server-side allowlist. The client only sends an id.
+        const modelId = model ?? DEFAULT_MODEL;
+        const available = listAvailableModels();
+        if (typeof modelId !== 'string' || !available.some((m) => m.id === modelId)) {
+            return res.status(400).json({ error: `Model not available: ${modelId}` });
+        }
+
 
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
@@ -25,7 +50,7 @@ agentRouter.post('/invoke', async(req,res) => {
         let clientDisconnected = false;
         req.on('close', () => { clientDisconnected = true; });
 
-        const stream = await runAgent(message, projectId); // now returns the agent's stream iterator
+        const stream = await runAgent(message, projectId,modelId); // now returns the agent's stream iterator
 
         for await (const [mode, payload] of stream) {
             
@@ -48,10 +73,12 @@ agentRouter.post('/invoke', async(req,res) => {
             
     }catch(error){
         console.log("Error invoking agent : ", error);
+        const reason = describeError(error);
+        const text = `Failed to invoke agent (${reason})`;
         if (!res.headersSent) {
             res.status(500).json({ error: "Failed to invoke agent" });
         } else {
-            res.write(`event: error\ndata: ${JSON.stringify({ error: "Failed to invoke agent" })}\n\n`);
+            res.write(`event: error\ndata: ${JSON.stringify({ error: text })}\n\n`);
             res.end();
         }
     }

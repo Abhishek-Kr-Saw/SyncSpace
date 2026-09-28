@@ -57,6 +57,17 @@ spec:
             port:
               number: 80
 
+  # ── API: Google Authentication ──────────────────────────────────────────────
+  - http:
+      paths:
+      - pathType: Prefix
+        path: "/api/auth"
+        backend:
+          service:
+            name: auth-service
+            port:
+              number: 80
+
   # ── Sandbox preview subdomains — *.preview.<domain> ──────────────────────
   - host: "*.preview.localhost"
     http:

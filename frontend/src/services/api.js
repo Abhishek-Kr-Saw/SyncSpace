@@ -1,5 +1,6 @@
 import { API_BASE, getAgentUrl } from '../config.js';
 
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const RETRY_STATUSES = new Set([404, 502, 503, 504]);
@@ -172,6 +173,15 @@ export async function updateFiles(sandboxId, files) {
   return res.json();
 }
 
+
+// /** Fetch the models the backend currently offers. */
+// export async function getModels() {
+//   const res = await fetch(`${API_BASE}/ai/models`);
+//   if (!res.ok) throw new Error(`Failed to load models: ${res.status}`);
+//   return res.json(); // { models: [{ id, label, provider }], default: "..." }
+// }
+
+
 /**
  * Invoke the AI agent with a user message.
  * Retries up to 8 times on 502/503/504 (agent pod cold-starting).
@@ -183,7 +193,7 @@ export async function updateFiles(sandboxId, files) {
  * @param {(attempt: number) => void} [onRetry] - called before each retry
  * @returns {Promise<Response>}
  */
-export async function invokeAI(message, projectId, signal, onRetry) {
+export async function invokeAI(message, projectId, signal, onRetry, model) {
   const MAX_RETRIES = 8;
   const RETRY_DELAY_MS = 1000;
   const RETRYABLE = new Set([502, 503, 504]);
@@ -202,7 +212,7 @@ export async function invokeAI(message, projectId, signal, onRetry) {
       const res = await fetch(`${API_BASE}/ai/invoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, projectId }),
+        body: JSON.stringify({ message, projectId, model }),
         signal,
       });
 
@@ -219,4 +229,10 @@ export async function invokeAI(message, projectId, signal, onRetry) {
   }
 
   throw lastError || new Error('AI agent did not become ready in time');
+}
+
+export async function getModels() {
+  const res = await fetch(`${API_BASE}/ai/models`);
+  if (!res.ok) throw new Error(`Failed to load models: ${res.status}`);
+  return res.json(); // { models: [{ id, label, provider }], default: "..." }
 }

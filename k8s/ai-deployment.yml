@@ -31,11 +31,19 @@ spec:
                 name: ai-secret
                 key: GROQ_API_KEY
 
-          # - name: MISTRAL_API_KEY
-          #   valueFrom:
-          #     secretKeyRef:
-          #       name: ai-secret
-          #       key: MISTRAL_API_KEY
+          - name: MISTRAL_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: ai-secret
+                key: MISTRAL_API_KEY
+                optional: true
+                
+          - name: GEMINI_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: ai-secret
+                key: GEMINI_API_KEY
+                optional: true
 
           
         livenessProbe:

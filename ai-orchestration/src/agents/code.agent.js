@@ -1,34 +1,62 @@
 import "dotenv/config";
+
 import { ChatGroq } from "@langchain/groq";
-// import { ChatMistralAI } from "@langchain/mistralai";
+import { ChatMistralAI } from "@langchain/mistralai";
+import { ChatGoogle } from "@langchain/google/node"; 
+
 import { listFiles, readFiles, updateFiles } from "./tool.js";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { MemorySaver } from "@langchain/langgraph";
 
-const model = new ChatGroq({
-    model: "openai/gpt-oss-120b",
-    apiKey: process.env.GROQ_API_KEY,
-    temperature: 0,
-})
 
-// const model = new ChatMistralAI({
-//     model: "mistral-small-latest",
-//     apiKey: process.env.MISTRAL_API_KEY,
-//     temperature: 0,
-// })
+// ─── Model registry ─────────────────────────────────────────────────────────
+// Each entry is one selectable model. Adding a provider = adding one entry.
+// The client only ever sends the entry's id (the key); it never sends a raw
+// model name or an API key.
+const MODELS = {
+    "groq/gpt-oss-120b": {
+        label: "GPT-OSS 120B (Groq)",
+        provider: "groq",
+        envKey: "GROQ_API_KEY",
+        create: () => new ChatGroq({ model: "openai/gpt-oss-120b", apiKey: process.env.GROQ_API_KEY, temperature: 0 }),
+    },
+    "mistral/small": {
+        label: "Mistral Small",
+        provider: "mistral",
+        envKey: "MISTRAL_API_KEY",
+        create: () => new ChatMistralAI({ model: "mistral-small-latest", apiKey: process.env.MISTRAL_API_KEY, temperature: 0 }),
+    },
+    "google/gemini-flash": {
+        label: "Gemini Flash (Google)",
+        provider: "google",
+        envKey: "GEMINI_API_KEY",
+        create: () => new ChatGoogle({ model: "gemini-3.7-flash", apiKey: process.env.GEMINI_API_KEY }),
+    },
+};
 
 
+export const DEFAULT_MODEL = "groq/gpt-oss-120b";
+
+// Only models whose API key is present in the environment are offered.
+export function listAvailableModels() {
+    return Object.entries(MODELS)
+        .filter(([, m]) => process.env[m.envKey])
+        .map(([id, m]) => ({ id, label: m.label, provider: m.provider }));
+}
+
+// ─── Agent ──────────────────────────────────────────────────────────────────
+ 
 // In-memory checkpointer — saves agent state after each successful step.
 // On 429 retry, the agent resumes from the last checkpoint instead of
 // restarting the entire conversation from scratch.
+// Shared by every per-model agent; thread ids keep the runs separate.
 const checkpointer = new MemorySaver();
 
-const agent = (createReactAgent({
-    llm: model,
-    tools: [listFiles, readFiles, updateFiles],
-    checkpointer,
-    prompt:`
-        You are a senior frontend engineer AI that builds and edits polished, production-quality websites inside a live sandbox. You work exclusively on a React + Vite (JavaScript) project that already exists — you never scaffold a new project.
+
+
+
+
+const SYSTEM_PROMPT = `You are a senior frontend engineer AI that builds and edits polished, production-quality websites inside a live sandbox. You work exclusively on a React + Vite (JavaScript) project that already exists — you never scaffold a new project.
 
 ## YOUR TOOLS
 - list_files — see what exists in the project
@@ -75,11 +103,28 @@ index.html, vite.config.js, package.json
 The user will describe, in one message, what kind of website or change they want (e.g. "build me a landing page for a coffee shop" or "add a testimonials section"). Treat each user message as the full spec for that task — infer sensible defaults for anything unstated rather than asking clarifying questions, unless the request is genuinely too ambiguous to act on.
 
 ## OUTPUT
-Your final reply to the user is a short confirmation of what you built or changed — never a code dump, never the raw tool output.
-    `
-})).withConfig({
-    recursionLimit: 100
-})
+Your final reply to the user is a short confirmation of what you built or changed — never a code dump, never the raw tool output.`
+
+
+const agents = new Map();
+
+function getAgent(modelId) {
+
+    if (!MODELS[modelId]) {
+        throw new Error(`Unknown model: ${modelId}`);
+    }
+
+    if (!agents.has(modelId)) {
+        agents.set(modelId, createReactAgent({
+            llm: MODELS[modelId].create(),
+            tools: [listFiles, readFiles, updateFiles],
+            checkpointer,
+            prompt: SYSTEM_PROMPT,
+        }).withConfig({ recursionLimit: 100 }));
+    }
+    return agents.get(modelId);
+}
+
 
 // Retry-with-backoff that RESUMES via checkpointer, not restarts.
 //
@@ -91,9 +136,10 @@ Your final reply to the user is a short confirmation of what you built or change
 // The checkpointer saved all prior model responses and tool results,
 // so the retry picks up at the exact model call that failed — no re-listing
 // or re-reading files, no duplicate tokens.
+
 async function invokeWithRetry(agent, input, config, maxRetries = 3) {
     let currentInput = input;
-
+ 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             return await agent.invoke(currentInput, config);
@@ -103,27 +149,27 @@ async function invokeWithRetry(agent, input, config, maxRetries = 3) {
                 || errMsg.includes("429")
                 || errMsg.includes("rate_limit")
                 || errMsg.includes("RateLimitError");
-
+ 
             if (!isRateLimit || attempt === maxRetries) {
                 console.error(`\n❌ Agent failed permanently after ${attempt} attempt(s).`);
                 console.error(`   Error: ${errMsg.slice(0, 300)}`);
                 console.error(`   The task could not be completed within the rate limit. Try again later.`);
                 throw new Error(`Agent failed permanently: ${errMsg.slice(0, 300)}`);
             }
-
+ 
             // Parse wait time from Groq error — match all known formats:
             //   "try again in 42.5s", "retry after 30s", "Please retry after 15.2s"
             const match = errMsg.match(/(?:try again in|retry after|Please retry after)\s*(\d+(?:\.\d+)?)\s*s/i);
             const rawWait = match ? parseFloat(match[1]) : null;
             const waitSec = rawWait !== null ? rawWait + 2 : 30; // +2s buffer; 30s default if unparseable
-
+ 
             console.log(`\n⏳ Rate limited (attempt ${attempt}/${maxRetries}).`);
             console.log(`   Raw error: "${errMsg.slice(0, 200)}"`);
             console.log(`   Parsed wait: ${rawWait !== null ? rawWait + "s (from error) + 2s buffer" : "not found in error, using default 30s"} → sleeping ${waitSec}s`);
             console.log(`   Will RESUME from last checkpoint (not restart).`);
-
+ 
             await new Promise(r => setTimeout(r, waitSec * 1000));
-
+ 
             // On retry, send empty messages — the checkpointer already has the
             // full conversation state, so the graph picks up from where it stopped.
             currentInput = { messages: [] };
@@ -132,9 +178,9 @@ async function invokeWithRetry(agent, input, config, maxRetries = 3) {
 }
 
 
-export async function runAgent(userMessage, projectId) {
+export async function runAgent(userMessage, projectId, modelId = DEFAULT_MODEL) {
     const threadId = `task-${projectId}-${Date.now()}`;
-    return agent.stream(
+    return getAgent(modelId).stream(
         { messages: [{ role: "user", content: userMessage }] },
         {
             configurable: { thread_id: threadId, projectId },
@@ -142,6 +188,3 @@ export async function runAgent(userMessage, projectId) {
         }
     );
 }
-
-export default agent;
-

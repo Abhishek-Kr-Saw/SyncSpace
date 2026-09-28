@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { io } from 'socket.io-client';
 import { useSandbox } from '../context/SandboxContext.jsx';
 import { getAgentUrl } from '../config.js';
+import { getAgentSocketUrl } from '../config.js';
 import '@xterm/xterm/css/xterm.css';
 
 /**
@@ -60,9 +61,7 @@ export default function TerminalPane() {
     fitAddonRef.current = fitAddon;
 
     // Connect Socket.IO through the Vite proxy
-    const agentUrl = getAgentUrl(sandboxId);
-    const socket = io('/', {
-      path: `${agentUrl}/socket.io`,
+    const socket = io(getAgentSocketUrl(sandboxId), {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 10,

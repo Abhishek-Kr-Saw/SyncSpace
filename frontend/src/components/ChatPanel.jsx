@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSandbox } from '../context/SandboxContext.jsx';
-import { invokeAI } from '../services/api.js';
+import { invokeAI, getModels } from '../services/api.js';
 import { parseSSE } from '../services/parseSSE.js';
 import ToolActivityChip from './ToolActivityChip.jsx';
 
@@ -182,6 +182,37 @@ export default function ChatPanel({ onToolEvent }) {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState(() => {
+    try { return localStorage.getItem('syncspace_model') || ''; } catch { return ''; }
+  });
+
+  // Load the available models once; keep the saved choice if it still exists
+  useEffect(() => {
+    let cancelled = false;
+    getModels()
+      .then((data) => {
+        if (cancelled) return;
+        setModels(data.models);
+        setSelectedModel((current) =>
+          data.models.some((m) => m.id === current)
+            ? current
+            : data.models.some((m) => m.id === data.default)
+              ? data.default
+              : data.models[0]?.id || ''
+        );
+      })
+      .catch(() => { /* dropdown stays hidden; the backend default is used */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  function handleModelChange(e) {
+    setSelectedModel(e.target.value);
+    try { localStorage.setItem('syncspace_model', e.target.value); } catch { /* ignore */ }
+  }
+
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -212,6 +243,7 @@ export default function ChatPanel({ onToolEvent }) {
         sandboxId,
         controller.signal,
         (attempt) => setConnectingStatus(`Connecting to agent… (attempt ${attempt})`),
+        selectedModel || undefined,
       );
       setConnectingStatus(null);
 
@@ -290,7 +322,7 @@ export default function ChatPanel({ onToolEvent }) {
       setConnectingStatus(null);
       abortRef.current = null;
     }
-  }, [input, isStreaming, sandboxId, onToolEvent]);
+  }, [input, isStreaming, sandboxId, onToolEvent, , selectedModel]);
 
   function handleStop() {
     abortRef.current?.abort();
@@ -406,13 +438,30 @@ export default function ChatPanel({ onToolEvent }) {
 
       {/* Input */}
       <div className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
-        <div
-          className="flex items-end gap-2 rounded-xl px-4 py-3"
-          style={{
-            backgroundColor: 'var(--bg-elevated)',
-            border: '1px solid var(--border)',
-          }}
-        >
+                {models.length > 0 && (
+          <div className="flex items-center gap-2 mb-2">
+            <label htmlFor="model-select" className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Model
+            </label>
+            <select
+              id="model-select"
+              value={selectedModel}
+              onChange={handleModelChange}
+              disabled={isStreaming}
+              className="text-xs rounded-md px-2 py-1 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: 'var(--bg-elevated)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+                colorScheme: 'dark',
+              }}
+            >
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
           <textarea
             ref={inputRef}
             value={input}
@@ -457,6 +506,5 @@ export default function ChatPanel({ onToolEvent }) {
           )}
         </div>
       </div>
-    </div>
   );
 }

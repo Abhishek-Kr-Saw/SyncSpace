@@ -24,5 +24,15 @@ export function getPreviewUrl(sandboxId) {
   return `http://${sandboxId}.preview.${BASE_DOMAIN}`;
 }
 
+
+/**
+ * Terminal (Socket.IO) URL for a sandbox. Connects straight to the agent
+ * subdomain through the ingress, the same way the preview iframe does.
+ */
+export function getAgentSocketUrl(sandboxId) {
+  return `http://${sandboxId}.agent.${BASE_DOMAIN}`;
+}
+
+
 /** Base path for the API gateway (proxied by Vite in dev). */
 export const API_BASE = '/api';
