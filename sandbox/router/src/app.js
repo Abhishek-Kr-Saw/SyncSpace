@@ -3,6 +3,7 @@ import morgan from 'morgan';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import http from 'http';
 import { createProxyServer } from 'httpxy';
+import { refreshTTL } from './config/redis.js'
 
 
 const app = express();
@@ -56,7 +57,7 @@ wsProxy.on('error', (err, req, socket) => {
 });
 
 
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
     const host = req.headers.host;
     if (!host) {
         return res.status(400).json({ error: "Missing Host header" });
@@ -68,6 +69,8 @@ app.use((req, res, next) => {
     const type = parts[1];
 
     console.log(`WS upgrade request: ${host}, sandboxId: ${sandboxId}, type: ${type}`);
+
+    await refreshTTL(sandboxId)
 
     if (type === 'agent') {
         return getAgentProxies(sandboxId)(req, res, next);

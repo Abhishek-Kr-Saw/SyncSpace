@@ -1,0 +1,4 @@
+k8s/ai-secrets.yml
+k8s/database-secrets.yml
+k8s/google-secrets.yml
+k8s/jwt-secrets.yml

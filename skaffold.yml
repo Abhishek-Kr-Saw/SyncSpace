@@ -55,3 +55,7 @@ manifests:
     - k8s/router-service.yml
     - k8s/sandbox-deployment.yml
     - k8s/sandbox-service.yml
+    - k8s/database-secrets.yml
+    - k8s/jwt-secrets.yml
+    - k8s/google-secrets.yml
+    - k8s/ai-secrets.yml
