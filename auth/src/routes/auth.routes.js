@@ -2,7 +2,7 @@ import { Router } from 'express';
 import passport from 'passport';
 import User from '../models/user.model.js';
 import jwt from 'jsonwebtoken';
-
+import { sendAuthNotification } from '../config/messageQueue.js'
 
 const router = Router();
 
@@ -33,12 +33,12 @@ router.get('/google/callback', passport.authenticate('google', {
             await user.save();
         }
 
-        // await sendAuthNotification({
-        //     userId: user._id,
-        //     action: 'google_login',
-        //     timestamp: new Date(),
-        //     email: emails[ 0 ].value
-        // })
+        await sendAuthNotification({
+            userId: user._id,
+            action: 'google_login',
+            timestamp: new Date(),
+            email: emails[ 0 ].value
+        })
 
         // Generate JWT token
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });

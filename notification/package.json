@@ -1,12 +1,12 @@
 {
-  "name": "auth",
+  "name": "notification",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "dev": "nodemon -L server.js"
+    "dev": "nodemon -L server.js",
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -14,15 +14,10 @@
   "description": "",
   "dependencies": {
     "amqplib": "^2.2.0",
-    "cookie-parser": "^1.4.7",
-    "cors": "^2.8.6",
-    "dotenv": "^18.0.3",
+    "dotenv": "^18.0.4",
     "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.10.2",
     "morgan": "^1.12.1",
-    "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0"
+    "nodemailer": "^10.0.12"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
