@@ -11,19 +11,21 @@ export default function ToolActivityChip({ tool, status, files }) {
     list_files: 'Listing files',
     read_files: 'Reading',
     update_files: 'Updating',
+    rate_limit_wait: 'Rate limit paused',
   };
 
   const completedLabels = {
     list_files: 'Listed files',
     read_files: 'Read',
     update_files: 'Updated',
+    rate_limit_wait: 'Resumed from rate limit',
   };
 
   const label = isComplete
     ? (completedLabels[tool] || tool)
     : (toolLabels[tool] || tool);
 
-  const fileNames = files && files.length > 0
+  const fileNames = files && files.length > 0 && tool !== 'list_files'
     ? files.map((f) => f.split('/').pop()).join(', ')
     : '';
 

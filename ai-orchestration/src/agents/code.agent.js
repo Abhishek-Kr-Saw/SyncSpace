@@ -18,19 +18,19 @@ const MODELS = {
         label: "GPT-OSS 120B (Groq)",
         provider: "groq",
         envKey: "GROQ_API_KEY",
-        create: () => new ChatGroq({ model: "openai/gpt-oss-120b", apiKey: process.env.GROQ_API_KEY, temperature: 0 }),
+        create: () => new ChatGroq({ model: "openai/gpt-oss-120b", apiKey: process.env.GROQ_API_KEY, temperature: 0, maxRetries: 0 }),
     },
     "mistral/small": {
         label: "Mistral Small",
         provider: "mistral",
         envKey: "MISTRAL_API_KEY",
-        create: () => new ChatMistralAI({ model: "mistral-small-latest", apiKey: process.env.MISTRAL_API_KEY, temperature: 0 }),
+        create: () => new ChatMistralAI({ model: "mistral-small-latest", apiKey: process.env.MISTRAL_API_KEY, temperature: 0, maxRetries: 0 }),
     },
     "google/gemini-flash": {
         label: "Gemini Flash (Google)",
         provider: "google",
         envKey: "GEMINI_API_KEY",
-        create: () => new ChatGoogle({ model: "gemini-3.7-flash", apiKey: process.env.GEMINI_API_KEY }),
+        create: () => new ChatGoogle({ model: "gemini-3.7-flash", apiKey: process.env.GEMINI_API_KEY, maxRetries: 0 }),
     },
 };
 
@@ -81,6 +81,8 @@ index.html, vite.config.js, package.json
 - Never call list_files more than once per task.
 - Never make a "let me double check" tool call after a successful update — trust the tool's success response.
 - Keep your own reasoning terse. Do not narrate every step to the user.
+- DO NOT output text like "I am listing files", "Reading files...", or "Files listed successfully: ...". The UI handles tool progress automatically. ONLY output conversational text when you are done with all tool calls and providing the final summary.
+- NEVER output raw file contents or file lists in your conversational text response.
 - If a task only requires editing 1–2 files, do not touch anything else.
 - Prefer editing existing files over creating new ones unless the task clearly calls for new components/pages.
 
@@ -126,23 +128,17 @@ function getAgent(modelId) {
 }
 
 
-// Retry-with-backoff that RESUMES via checkpointer, not restarts.
-//
-// How it works:
-//   1st call:  agent.invoke({ messages: [user prompt] })  → starts fresh
-//   On 429:    waits for Groq's requested cooldown + buffer
-//   Retry:     agent.invoke({ messages: [] })              → resumes from last checkpoint
-//
-// The checkpointer saved all prior model responses and tool results,
-// so the retry picks up at the exact model call that failed — no re-listing
-// or re-reading files, no duplicate tokens.
-
-async function invokeWithRetry(agent, input, config, maxRetries = 3) {
+// Retry-with-backoff for streaming that RESUMES via checkpointer, not restarts.
+async function* streamWithRetry(agent, input, config, maxRetries = 3) {
     let currentInput = input;
  
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            return await agent.invoke(currentInput, config);
+            const stream = await agent.stream(currentInput, config);
+            for await (const chunk of stream) {
+                yield chunk;
+            }
+            return; // Success, exit generator
         } catch (err) {
             const errMsg = err?.message || String(err);
             const isRateLimit = err?.status === 429
@@ -153,22 +149,22 @@ async function invokeWithRetry(agent, input, config, maxRetries = 3) {
             if (!isRateLimit || attempt === maxRetries) {
                 console.error(`\n❌ Agent failed permanently after ${attempt} attempt(s).`);
                 console.error(`   Error: ${errMsg.slice(0, 300)}`);
-                console.error(`   The task could not be completed within the rate limit. Try again later.`);
                 throw new Error(`Agent failed permanently: ${errMsg.slice(0, 300)}`);
             }
  
             // Parse wait time from Groq error — match all known formats:
-            //   "try again in 42.5s", "retry after 30s", "Please retry after 15.2s"
             const match = errMsg.match(/(?:try again in|retry after|Please retry after)\s*(\d+(?:\.\d+)?)\s*s/i);
             const rawWait = match ? parseFloat(match[1]) : null;
             const waitSec = rawWait !== null ? rawWait + 2 : 30; // +2s buffer; 30s default if unparseable
  
-            console.log(`\n⏳ Rate limited (attempt ${attempt}/${maxRetries}).`);
-            console.log(`   Raw error: "${errMsg.slice(0, 200)}"`);
-            console.log(`   Parsed wait: ${rawWait !== null ? rawWait + "s (from error) + 2s buffer" : "not found in error, using default 30s"} → sleeping ${waitSec}s`);
-            console.log(`   Will RESUME from last checkpoint (not restart).`);
- 
+            console.log(`\n⏳ Rate limited (attempt ${attempt}/${maxRetries}). Sleeping ${waitSec}s...`);
+            
+            // Yield a custom event so the frontend knows we are rate limited and waiting
+            yield ["custom", { type: "tool_call", tool: "rate_limit_wait", status: "start", files: [`waiting ${waitSec}s`] }];
+            
             await new Promise(r => setTimeout(r, waitSec * 1000));
+            
+            yield ["custom", { type: "tool_call", tool: "rate_limit_wait", status: "end" }];
  
             // On retry, send empty messages — the checkpointer already has the
             // full conversation state, so the graph picks up from where it stopped.
@@ -177,10 +173,12 @@ async function invokeWithRetry(agent, input, config, maxRetries = 3) {
     }
 }
 
-
 export async function runAgent(userMessage, projectId, modelId = DEFAULT_MODEL) {
     const threadId = `task-${projectId}-${Date.now()}`;
-    return getAgent(modelId).stream(
+    const agent = getAgent(modelId);
+    
+    return streamWithRetry(
+        agent,
         { messages: [{ role: "user", content: userMessage }] },
         {
             configurable: { thread_id: threadId, projectId },

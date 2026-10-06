@@ -45,19 +45,33 @@ agentRouter.post('/invoke', async(req,res) => {
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
+        res.write(': connected\n\n');
 
         // Abort streaming when client disconnects to save API tokens
         let clientDisconnected = false;
-        req.on('close', () => { clientDisconnected = true; });
+        req.on('aborted', () => { 
+            console.log(`[DEBUG] req.on('aborted') fired for project ${projectId}`);
+            clientDisconnected = true; 
+        });
+        req.on('close', () => {
+            // Check if it's genuinely disconnected or just the request stream ending
+            if (res.socket && res.socket.destroyed) {
+                console.log(`[DEBUG] req.on('close') fired and socket is destroyed for project ${projectId}`);
+                clientDisconnected = true;
+            }
+        });
 
-        const stream = await runAgent(message, projectId,modelId); // now returns the agent's stream iterator
+        let stream = await runAgent(message, projectId,modelId); // now returns the agent's stream iterator
 
         for await (const [mode, payload] of stream) {
             
             if (clientDisconnected) break;
 
+            console.log(`[DEBUG] Received chunk from agent: mode=${mode}`);
+
             if (mode === "custom") {
-                res.write(`event: tool\ndata: ${JSON.stringify(payload)}\n\n`);
+                const eventData = payload?.name === "tool_call" ? payload.data : payload;
+                res.write(`event: tool\ndata: ${JSON.stringify(eventData)}\n\n`);
             } else if (mode === "messages") {
                 const [messageChunk] = payload;
                 if (messageChunk?.content) {
@@ -67,8 +81,11 @@ agentRouter.post('/invoke', async(req,res) => {
         }
 
         if (!clientDisconnected) {
+            console.log(`[DEBUG] Stream finished normally for project ${projectId}. Sending event: done.`);
             res.write('event: done\ndata: {}\n\n');
             res.end();
+        } else {
+            console.log(`[DEBUG] Client disconnected for project ${projectId}. Stream aborted.`);
         }
             
     }catch(error){

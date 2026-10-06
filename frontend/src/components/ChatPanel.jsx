@@ -322,7 +322,7 @@ export default function ChatPanel({ onToolEvent }) {
       setConnectingStatus(null);
       abortRef.current = null;
     }
-  }, [input, isStreaming, sandboxId, onToolEvent, , selectedModel]);
+  }, [input, isStreaming, sandboxId, onToolEvent, selectedModel]);
 
   function handleStop() {
     abortRef.current?.abort();
@@ -438,7 +438,7 @@ export default function ChatPanel({ onToolEvent }) {
 
       {/* Input */}
       <div className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
-                {models.length > 0 && (
+        {models.length > 0 && (
           <div className="flex items-center gap-2 mb-2">
             <label htmlFor="model-select" className="text-xs" style={{ color: 'var(--text-muted)' }}>
               Model
@@ -462,6 +462,8 @@ export default function ChatPanel({ onToolEvent }) {
             </select>
           </div>
         )}
+        
+        <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
             value={input}
@@ -469,7 +471,7 @@ export default function ChatPanel({ onToolEvent }) {
             onKeyDown={handleKeyDown}
             placeholder="Ask SyncSpace AI…"
             rows={rows}
-            className="flex-1 bg-transparent outline-none resize-none text-sm leading-relaxed"
+            className="flex-1 bg-transparent outline-none resize-none text-sm leading-relaxed py-1"
             style={{ color: 'var(--text-primary)', maxHeight: '120px' }}
             disabled={isStreaming}
           />
@@ -494,8 +496,8 @@ export default function ChatPanel({ onToolEvent }) {
               disabled={!input.trim()}
               className="p-2 rounded-lg transition-all duration-150 shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
               style={{
-                backgroundColor: input.trim() ? 'var(--accent)' : 'transparent',
-                color: input.trim() ? 'var(--bg-primary)' : 'var(--text-muted)',
+                backgroundColor: 'var(--accent)',
+                color: 'var(--bg-primary)',
               }}
               title="Send message"
             >
@@ -506,5 +508,6 @@ export default function ChatPanel({ onToolEvent }) {
           )}
         </div>
       </div>
+    </div>
   );
 }

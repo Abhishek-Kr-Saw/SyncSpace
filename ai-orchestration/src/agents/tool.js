@@ -1,19 +1,19 @@
 import axios from "axios";
 import { tool } from "@langchain/core/tools";
 import * as z from "zod";
+import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 
 const readCache = new Map();
 
 export const listFiles = tool(
     async({ }, config) => {
 
-        const writer = config.writer;
-        writer?.({ type: "tool_call", tool: "list_files", status: "start" });
+        await dispatchCustomEvent("tool_call", { type: "tool_call", tool: "list_files", status: "start" }, config);
 
         const projectId = config.configurable?.projectId;
         const response = await axios.get(`http://sandbox-service-${projectId}:3000/list-files`)
 
-        writer?.({ type: "tool_call", tool: "list_files", status: "end", files: response.data.files });
+        await dispatchCustomEvent("tool_call", { type: "tool_call", tool: "list_files", status: "end", files: response.data.files }, config);
         return JSON.stringify(response.data.files);
     },
     {
@@ -27,8 +27,7 @@ export const listFiles = tool(
 export const readFiles = tool(
     async ({ files }, config) => {
 
-        const writer = config.writer;
-        writer?.({ type: "tool_call", tool: "read_files", status: "start", files });
+        await dispatchCustomEvent("tool_call", { type: "tool_call", tool: "read_files", status: "start", files }, config);
 
         // Scope cache by thread_id so different projects don't collide
         const threadId = config.configurable?.thread_id || '';
@@ -57,7 +56,7 @@ export const readFiles = tool(
                 }
             }
         }
-        writer?.({ type: "tool_call", tool: "read_files", status: "end", files });
+        await dispatchCustomEvent("tool_call", { type: "tool_call", tool: "read_files", status: "end", files }, config);
         return JSON.stringify({ message: "File contents", files: results });
     },
     {
@@ -73,14 +72,13 @@ export const readFiles = tool(
 export const updateFiles = tool(
     async ({ files }, config) => {
 
-        const writer = config.writer;
         const fileNames = files.map(f => f.file);
-        writer?.({ type: "tool_call", tool: "update_files", status: "start", files: fileNames });
+        await dispatchCustomEvent("tool_call", { type: "tool_call", tool: "update_files", status: "start", files: fileNames }, config);
 
         const projectId = config.configurable?.projectId;
         const response = await axios.patch(`http://sandbox-service-${projectId}:3000/update-files`, {files})
 
-        writer?.({ type: "tool_call", tool: "update_files", status: "end", files: fileNames });
+        await dispatchCustomEvent("tool_call", { type: "tool_call", tool: "update_files", status: "end", files: fileNames }, config);
 
         return JSON.stringify(response.data);
     },
