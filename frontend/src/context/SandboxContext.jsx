@@ -12,12 +12,12 @@ export function SandboxProvider({ children }) {
   const [sandbox, setSandboxState] = useState(() => {
     // Eagerly read session on provider init — App.jsx probes liveness before using it
     const saved = loadSession();
-    return saved ?? { sandboxId: null, previewUrl: null };
+    return saved ?? { sandboxId: null, previewUrl: null, projectTitle: null };
   });
 
-  const setSandbox = useCallback((sandboxId, previewUrl) => {
-    setSandboxState({ sandboxId, previewUrl });
-    saveSession(sandboxId, previewUrl);
+  const setSandbox = useCallback((sandboxId, previewUrl, projectTitle) => {
+    setSandboxState({ sandboxId, previewUrl, projectTitle });
+    saveSession(sandboxId, previewUrl, projectTitle);
   }, []);
 
   return (

@@ -67,7 +67,9 @@ spec:
             secretKeyRef:
               name: jwt
               key: JWT_SECRET
-
+              
+        - name: FRONTEND_URL
+          value: "http://localhost"
 
         ports:
         - containerPort:  3000

@@ -7,9 +7,9 @@
 const SESSION_KEY = 'syncspace_session';
 
 /** Persist sandbox session to sessionStorage so page reloads restore state. */
-export function saveSession(sandboxId, previewUrl) {
+export function saveSession(sandboxId, previewUrl, projectTitle) {
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ sandboxId, previewUrl }));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ sandboxId, previewUrl, projectTitle }));
   } catch {
     // Ignore storage errors (private browsing, quota)
   }
@@ -20,8 +20,8 @@ export function loadSession() {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
-    const { sandboxId, previewUrl } = JSON.parse(raw);
-    if (sandboxId && previewUrl) return { sandboxId, previewUrl };
+    const { sandboxId, previewUrl, projectTitle } = JSON.parse(raw);
+    if (sandboxId && previewUrl) return { sandboxId, previewUrl, projectTitle };
   } catch {
     // Ignore parse errors
   }

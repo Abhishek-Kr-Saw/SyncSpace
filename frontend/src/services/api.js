@@ -40,7 +40,45 @@ async function fetchWithRetry(url, options = {}, { retries = 20, delayMs = 500 }
  * Start a new sandbox environment.
  * @returns {Promise<{ sandboxId: string, previewUrl: string }>}
  */
-export async function startSandbox() {
+/**
+ * Create a new project.
+ * @param {string} title 
+ * @returns {Promise<{ message: string, project: object }>}
+ */
+export async function createProject(title = 'New Project') {
+  const res = await fetch(`${API_BASE}/sandbox/project`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create project: ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Get all projects.
+ * @returns {Promise<{ message: string, projects: array }>}
+ */
+export async function getProjects() {
+  const res = await fetch(`${API_BASE}/sandbox/project`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to retrieve projects: ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Start a new sandbox environment.
+ * @returns {Promise<{ sandboxId: string, previewUrl: string }>}
+ */
+export async function startSandbox(projectId) {
   let retries = 15;
   let lastError;
 
@@ -48,7 +86,8 @@ export async function startSandbox() {
     const res = await fetch(`${API_BASE}/sandbox/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'omit', // Bypass Nginx ingress cookie affinity to avoid sticking to wrong pod
+      body: JSON.stringify({ projectId }),
+      credentials: 'include', // Must include to send the auth token cookie
     });
 
     if (res.ok) {

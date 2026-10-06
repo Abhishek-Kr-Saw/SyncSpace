@@ -19,26 +19,29 @@ spec:
           # Replace with your actual registry/image:tag, e.g.:
           #   ghcr.io/<your-org>/syncspace-frontend:latest
           #   docker.io/<your-user>/syncspace-frontend:latest
-          image: syncspace-frontend:latest
-          imagePullPolicy: Always
+          image: frontend
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CHOKIDAR_USEPOLLING
+              value: "true"
           ports:
-            - containerPort: 80
+            - containerPort: 5173
           readinessProbe:
             httpGet:
-              path: /healthz
-              port: 80
-            initialDelaySeconds: 3
+              path: /
+              port: 5173
+            initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /healthz
-              port: 80
+              path: /
+              port: 5173
             initialDelaySeconds: 10
             periodSeconds: 15
           resources:
             requests:
-              cpu: "50m"
-              memory: "64Mi"
+              cpu: "100m"
+              memory: "256Mi"
             limits:
-              cpu: "200m"
-              memory: "128Mi"
+              cpu: "500m"
+              memory: "512Mi"

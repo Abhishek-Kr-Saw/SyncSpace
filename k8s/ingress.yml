@@ -69,7 +69,7 @@ spec:
               number: 80
 
   # ── Sandbox preview subdomains — *.preview.<domain> ──────────────────────
-  - host: "*.preview.localhost"
+  - host: "*.preview.localtest.me"
     http:
       paths:
       - pathType: Prefix
@@ -81,7 +81,7 @@ spec:
               number: 80
 
   # ── Sandbox agent subdomains — *.agent.<domain> ───────────────────────────
-  - host: "*.agent.localhost"
+  - host: "*.agent.localtest.me"
     http:
       paths:
       - pathType: Prefix
@@ -98,16 +98,16 @@ spec:
   # For a real domain, change the host to e.g. "syncspace.example.com"
   # and remove/comment the pathType: Prefix rule below, replacing it with:
   #
-  #   - host: "syncspace.example.com"
-  #     http:
-  #       paths:
-  #       - pathType: Prefix
-  #         path: "/"
-  #         backend:
-  #           service:
-  #             name: frontend-service
-  #             port:
-  #               number: 80
+  
+    # -http:
+    #   paths:
+    #   - pathType: Prefix
+    #     path: "/"
+    #     backend:
+    #           service:
+    #             name: frontend-service
+    #             port:
+    #               number: 80
   #
   # For local dev with no domain, use the pathType rule:
   - http:

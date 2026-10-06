@@ -10,7 +10,7 @@ export default defineConfig({
     },
     proxy: {
       '^/agent-proxy/.*': {
-        target: 'http://localhost',
+        target: 'http://router-service:80',
         changeOrigin: false,
         ws: true,
         rewrite: (path) => path.replace(/^\/agent-proxy\/[^/?]+/, ''),
@@ -26,7 +26,7 @@ export default defineConfig({
         }
       },
       '^/preview-proxy/.*': {
-        target: 'http://localhost',
+        target: 'http://router-service:80',
         changeOrigin: false,
         ws: false,
         rewrite: (path) => path.replace(/^\/preview-proxy\/[^/?]+/, ''),

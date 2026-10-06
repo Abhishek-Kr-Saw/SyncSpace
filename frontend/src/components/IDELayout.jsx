@@ -4,6 +4,7 @@ import ChatPanel from './ChatPanel.jsx';
 import RightPanel from './RightPanel.jsx';
 import ResizeDivider from './ResizeDivider.jsx';
 import { useResizablePanes } from '../hooks/useResizablePanes.js';
+import { useSandbox } from '../context/SandboxContext.jsx';
 
 // Pane indices: 0 = FileExplorer, 1 = ChatPanel, (right panel = flex-1)
 const PANE_CONSTRAINTS = [
@@ -20,6 +21,8 @@ export default function IDELayout() {
   const [activeRightTab, setActiveRightTab] = useState('preview');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [changedFiles, setChangedFiles] = useState([]);
+
+  const { projectTitle } = useSandbox();
 
   // Resizable panes: initial widths in px for [explorer, chat]
   const { widths, startDrag } = useResizablePanes([224, 384], PANE_CONSTRAINTS);
@@ -70,6 +73,14 @@ export default function IDELayout() {
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
             SyncSpace
           </span>
+          {projectTitle && (
+            <>
+              <span style={{ color: 'var(--text-muted)' }}>/</span>
+              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                {projectTitle}
+              </span>
+            </>
+          )}
         </div>
       </header>
 

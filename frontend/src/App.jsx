@@ -41,7 +41,7 @@ function AppContent() {
       .then((res) => {
         clearTimeout(timeout);
         if (res.ok) {
-          setSandbox(saved.sandboxId, saved.previewUrl);
+          setSandbox(saved.sandboxId, saved.previewUrl, saved.projectTitle);
           setAppState('ide');
         } else {
           clearSession();
@@ -66,8 +66,8 @@ function AppContent() {
     setAppState(show ? 'loading' : 'landing');
   }, []);
 
-  const handleSandboxReady = useCallback((newSandboxId, previewUrl) => {
-    setSandbox(newSandboxId, previewUrl);
+  const handleSandboxReady = useCallback((newSandboxId, previewUrl, projectTitle) => {
+    setSandbox(newSandboxId, previewUrl, projectTitle);
     setAppState('ide');
   }, [setSandbox]);
 

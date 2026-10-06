@@ -12,25 +12,21 @@ const BASE_DOMAIN = 'localhost';
  * Routed through Vite's dev proxy to bypass CORS/DNS issues with local subdomains.
  */
 export function getAgentUrl(sandboxId) {
-  // Use relative URL so requests go to Vite server (localhost:5173), which proxies them.
-  return `/agent-proxy/${sandboxId}`;
+  return `http://${sandboxId}.agent.localtest.me`;
 }
 
 /**
  * Build the preview URL for a given sandbox.
- * This is the Vite dev server running inside the sandbox container.
  */
 export function getPreviewUrl(sandboxId) {
-  return `http://${sandboxId}.preview.${BASE_DOMAIN}`;
+  return `http://${sandboxId}.preview.localtest.me`;
 }
 
-
 /**
- * Terminal (Socket.IO) URL for a sandbox. Connects straight to the agent
- * subdomain through the ingress, the same way the preview iframe does.
+ * Terminal (Socket.IO) URL for a sandbox.
  */
 export function getAgentSocketUrl(sandboxId) {
-  return `http://${sandboxId}.agent.${BASE_DOMAIN}`;
+  return `http://${sandboxId}.agent.localtest.me`;
 }
 
 
