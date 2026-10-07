@@ -235,6 +235,18 @@ export default function ChatPanel({ onToolEvent }) {
 
 
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsModelMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState(() => {
@@ -260,9 +272,10 @@ export default function ChatPanel({ onToolEvent }) {
     return () => { cancelled = true; };
   }, []);
 
-  function handleModelChange(e) {
-    setSelectedModel(e.target.value);
-    try { localStorage.setItem('syncspace_model', e.target.value); } catch { /* ignore */ }
+  function handleModelChange(modelId) {
+    setSelectedModel(modelId);
+    setIsModelMenuOpen(false);
+    try { localStorage.setItem('syncspace_model', modelId); } catch { /* ignore */ }
   }
 
   // Load history
@@ -499,27 +512,55 @@ export default function ChatPanel({ onToolEvent }) {
       {/* Input */}
       <div className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
         {models.length > 0 && (
-          <div className="flex items-center gap-2 mb-2">
-            <label htmlFor="model-select" className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Model
-            </label>
-            <select
-              id="model-select"
-              value={selectedModel}
-              onChange={handleModelChange}
-              disabled={isStreaming}
-              className="text-xs rounded-md px-2 py-1 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                backgroundColor: 'var(--bg-elevated)',
-                color: 'var(--text-primary)',
-                border: '1px solid var(--border)',
-                colorScheme: 'dark',
-              }}
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
+          <div className="relative mb-2" ref={menuRef}>
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Model</span>
+              <button
+                type="button"
+                onClick={() => !isStreaming && setIsModelMenuOpen(!isModelMenuOpen)}
+                disabled={isStreaming}
+                className="text-xs rounded-md px-2 py-1 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between gap-2"
+                style={{
+                  backgroundColor: 'var(--bg-elevated)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border)',
+                  minWidth: '140px'
+                }}
+              >
+                <span>{models.find(m => m.id === selectedModel)?.label || 'Select a model'}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isModelMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            </div>
+            
+            {isModelMenuOpen && (
+              <div 
+                className="absolute z-50 bottom-full left-0 mb-1 rounded-md shadow-lg overflow-hidden flex flex-col"
+                style={{
+                  backgroundColor: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)',
+                  minWidth: '180px'
+                }}
+              >
+                {models.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => handleModelChange(m.id)}
+                    className="text-xs text-left px-3 py-2 hover:bg-white/5 transition-colors flex items-center gap-2"
+                    style={{ 
+                      color: selectedModel === m.id ? 'var(--accent)' : 'var(--text-primary)',
+                      backgroundColor: selectedModel === m.id ? 'rgba(62, 207, 180, 0.1)' : 'transparent'
+                    }}
+                  >
+                    {selectedModel === m.id && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    )}
+                    <span className={selectedModel === m.id ? '' : 'ml-5'}>{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         

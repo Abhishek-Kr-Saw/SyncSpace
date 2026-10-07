@@ -11,3 +11,5 @@ await connectDB();
 app.listen(3000, () => {
     console.log("AI orchestration is running on port 3000")
 })
+
+// Triggering restart to load .env variables
