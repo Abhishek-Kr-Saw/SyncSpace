@@ -61,26 +61,50 @@ agentRouter.post('/invoke', async(req,res) => {
             }
         });
 
-        let stream = await runAgent(message, projectId,modelId); // now returns the agent's stream iterator
+        let stream = await runAgent(message, projectId,modelId);
+
+        let currentMessageId = null;
+        let currentMessageBuffer = "";
+        let currentMessageHasToolCalls = false;
 
         for await (const [mode, payload] of stream) {
             
             if (clientDisconnected) break;
 
-            console.log(`[DEBUG] Received chunk from agent: mode=${mode}`);
-
             if (mode === "custom") {
                 const eventData = payload?.name === "tool_call" ? payload.data : payload;
                 res.write(`event: tool\ndata: ${JSON.stringify(eventData)}\n\n`);
             } else if (mode === "messages") {
-                const [messageChunk] = payload;
-                if (messageChunk?.content) {
-                    res.write(`event: message\ndata: ${JSON.stringify({ content: messageChunk.content })}\n\n`);
+                const [messageChunk, metadata] = payload;
+                
+                // Skip non-agent messages and tool messages
+                if (metadata?.langgraph_node !== 'agent' || messageChunk._getType?.() !== 'ai') {
+                    continue;
+                }
+                
+                if (currentMessageId !== messageChunk.id) {
+                    if (currentMessageId !== null && !currentMessageHasToolCalls && currentMessageBuffer.trim()) {
+                        res.write(`event: message\ndata: ${JSON.stringify({ content: currentMessageBuffer })}\n\n`);
+                    }
+                    currentMessageId = messageChunk.id;
+                    currentMessageBuffer = "";
+                    currentMessageHasToolCalls = false;
+                }
+
+                if (messageChunk?.tool_call_chunks && messageChunk.tool_call_chunks.length > 0) {
+                    currentMessageHasToolCalls = true;
+                }
+
+                if (messageChunk?.content && typeof messageChunk.content === 'string') {
+                    currentMessageBuffer += messageChunk.content;
                 }
             }
         }
 
         if (!clientDisconnected) {
+            if (currentMessageId !== null && !currentMessageHasToolCalls && currentMessageBuffer.trim()) {
+                res.write(`event: message\ndata: ${JSON.stringify({ content: currentMessageBuffer })}\n\n`);
+            }
             console.log(`[DEBUG] Stream finished normally for project ${projectId}. Sending event: done.`);
             res.write('event: done\ndata: {}\n\n');
             res.end();

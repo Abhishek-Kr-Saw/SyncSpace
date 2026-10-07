@@ -100,6 +100,25 @@ function renderMarkdown(text) {
       continue;
     }
 
+    // Numbered list items (1. or 1) )
+    if (/^[\s]*\d+[\.)]\s/.test(line)) {
+      const listItems = [];
+      while (i < lines.length && /^[\s]*\d+[\.)]\s/.test(lines[i])) {
+        listItems.push(
+          <li key={key++} style={{ marginBottom: 2 }}>
+            {inlineMarkdown(lines[i].replace(/^[\s]*\d+[\.)]\s/, ''))}
+          </li>
+        );
+        i++;
+      }
+      nodes.push(
+        <ol key={key++} style={{ paddingLeft: 16, margin: '4px 0', listStyleType: 'decimal' }}>
+          {listItems}
+        </ol>
+      );
+      continue;
+    }
+
     // Blank line — paragraph break
     if (line.trim() === '') {
       nodes.push(<div key={key++} style={{ height: 6 }} />);
@@ -166,6 +185,36 @@ function inlineMarkdown(text) {
 
   return parts.length > 0 ? parts : text;
 }
+function ToolRow({ item }) {
+  const isRunning = item.status === 'running';
+  const isSuccess = item.status === 'success';
+  const isError = item.status === 'error';
+  
+  const color = isRunning ? 'var(--text-secondary)' : isSuccess ? '#10b981' : '#ef4444';
+  
+  return (
+    <div className="flex items-start gap-3 py-1.5 px-2 rounded-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)' }}>
+      <div className="mt-0.5 shrink-0" style={{ color }}>
+        {isRunning ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        ) : isSuccess ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        )}
+      </div>
+      <div className="flex flex-col gap-0.5 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
+        <span>{item.label}</span>
+        {item.paths && item.paths.length > 0 && (
+          <span className="opacity-70 truncate max-w-[200px] sm:max-w-[250px]">
+            {item.paths.length > 3 ? `${item.paths.length} files` : item.paths.join(', ')}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -229,10 +278,8 @@ export default function ChatPanel({ onToolEvent }) {
     setIsStreaming(true);
     setConnectingStatus(null);
 
-    // Add user message + placeholder for assistant response
-    const userMsg = { role: 'user', content: text };
-    const assistantMsg = { role: 'assistant', content: '', toolEvents: [] };
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    const userMsg = { type: 'message', role: 'user', content: text, timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
+    setMessages((prev) => [...prev, userMsg]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -247,75 +294,48 @@ export default function ChatPanel({ onToolEvent }) {
       );
       setConnectingStatus(null);
 
-      // Track tool events by their tool name for in-place updates
-      const toolMap = new Map();
-
       for await (const { event, data } of parseSSE(response)) {
         if (event === 'message') {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = { ...updated[updated.length - 1] };
-            last.content += data.content || '';
-            updated[updated.length - 1] = last;
-            return updated;
-          });
+          if (data.content && data.content.trim()) {
+            setMessages((prev) => [
+              ...prev, 
+              { type: 'message', role: 'assistant', content: data.content, timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
+            ]);
+          }
         } else if (event === 'tool') {
-          if (data.status === 'start') {
-            const key = `${data.tool}-${Date.now()}`;
-            toolMap.set(key, data);
-
+          if (data.status === 'running') {
+            setMessages((prev) => [...prev, { type: 'tool', ...data }]);
+          } else if (data.status === 'success' || data.status === 'error') {
             setMessages((prev) => {
               const updated = [...prev];
-              const last = { ...updated[updated.length - 1] };
-              last.toolEvents = [...(last.toolEvents || []), { ...data, key }];
-              updated[updated.length - 1] = last;
-              return updated;
-            });
-          } else if (data.status === 'end') {
-            // Update the most recent matching tool's status to "end"
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = { ...updated[updated.length - 1] };
-              const events = [...(last.toolEvents || [])];
-              for (let i = events.length - 1; i >= 0; i--) {
-                if (events[i].tool === data.tool && events[i].status === 'start') {
-                  events[i] = { ...events[i], status: 'end', files: data.files || events[i].files };
+              for (let i = updated.length - 1; i >= 0; i--) {
+                if (updated[i].type === 'tool' && updated[i].id === data.id) {
+                  updated[i] = { ...updated[i], ...data };
                   break;
                 }
               }
-              last.toolEvents = events;
-              updated[updated.length - 1] = last;
               return updated;
             });
-
             if (data.tool === 'update_files') {
-              onToolEvent?.('update_files_end', { files: data.files || [] });
+              onToolEvent?.('update_files_end', { files: data.paths || [] });
             }
           }
         } else if (event === 'error') {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = { ...updated[updated.length - 1] };
-            last.content += `\n\n⚠️ Error: ${data.error || 'Something went wrong'}`;
-            last.isError = true;
-            updated[updated.length - 1] = last;
-            return updated;
-          });
+          setMessages((prev) => [
+            ...prev, 
+            { type: 'message', role: 'assistant', isError: true, content: `⚠️ Error: ${data.error || 'Something went wrong'}`, timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
+          ]);
         } else if (event === 'done') {
-          break; // agent finished, leave the loop so isStreaming resets
+          break;
         }
       }
     } catch (err) {
       setConnectingStatus(null);
       if (err.name !== 'AbortError') {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = { ...updated[updated.length - 1] };
-          last.content = `⚠️ Error: ${err.message}`;
-          last.isError = true;
-          updated[updated.length - 1] = last;
-          return updated;
-        });
+        setMessages((prev) => [
+          ...prev, 
+          { type: 'message', role: 'assistant', isError: true, content: `⚠️ Error: ${err.message}`, timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
+        ]);
       }
     } finally {
       setIsStreaming(false);
@@ -366,11 +386,12 @@ export default function ChatPanel({ onToolEvent }) {
             </span>
           )}
           {isStreaming && !connectingStatus && (
-            <span className="text-xs px-2 py-0.5 rounded-full" style={{
+            <span className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1.5" style={{
               backgroundColor: 'rgba(62, 207, 180, 0.1)',
               color: 'var(--accent)',
             }}>
-              Streaming…
+              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
+              Working...
             </span>
           )}
         </div>
@@ -389,50 +410,36 @@ export default function ChatPanel({ onToolEvent }) {
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className="max-w-[90%] rounded-xl px-4 py-3 text-sm leading-relaxed"
-              style={{
-                backgroundColor: msg.role === 'user'
-                  ? 'var(--bg-elevated)'
-                  : 'transparent',
-                color: msg.isError ? 'var(--error)' : 'var(--text-primary)',
-                border: msg.role === 'user' ? '1px solid var(--border)' : 'none',
-              }}
-            >
-              {/* Tool events (for assistant messages) */}
-              {msg.toolEvents && msg.toolEvents.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {msg.toolEvents.map((te, j) => (
-                    <ToolActivityChip
-                      key={te.key || j}
-                      tool={te.tool}
-                      status={te.status}
-                      files={te.files}
-                    />
-                  ))}
-                </div>
-              )}
+        {messages.map((item, i) => {
+          if (item.type === 'tool') {
+            return <ToolRow key={item.id || i} item={item} />;
+          }
 
-              {/* Message content — markdown for assistant, plain for user */}
-              {msg.content && (
-                <div className={msg.role === 'user' ? 'whitespace-pre-wrap break-words' : ''}>
-                  {msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content}
-                  {/* Blinking cursor for streaming */}
-                  {msg.role === 'assistant' && isStreaming && i === messages.length - 1 && (
-                    <span className="streaming-cursor" />
-                  )}
+          return (
+            <div key={i} className={`flex ${item.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className="max-w-[95%] sm:max-w-[90%] rounded-xl px-4 py-3 text-sm leading-relaxed"
+                style={{
+                  backgroundColor: item.role === 'user'
+                    ? 'var(--bg-elevated)'
+                    : 'transparent',
+                  color: item.isError ? 'var(--error)' : 'var(--text-primary)',
+                  border: item.role === 'user' ? '1px solid var(--border)' : 'none',
+                }}
+              >
+                <div className={`break-words ${item.role === 'user' ? 'whitespace-pre-wrap' : ''}`}>
+                  {item.role === 'assistant' ? renderMarkdown(item.content) : item.content}
                 </div>
-              )}
-
-              {/* Show cursor even when no content yet (tool events only) */}
-              {!msg.content && msg.role === 'assistant' && isStreaming && i === messages.length - 1 && (
-                <span className="streaming-cursor" />
-              )}
+                
+                {item.timestamp && (
+                  <div className={`text-[10px] mt-1.5 opacity-50 ${item.role === 'user' ? 'text-right' : 'text-left'}`}>
+                    {item.timestamp}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 

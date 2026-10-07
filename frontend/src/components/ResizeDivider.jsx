@@ -9,7 +9,7 @@ export default function ResizeDivider({ onDragStart }) {
 
   return (
     <div
-      onMouseDown={onDragStart}
+      onPointerDown={onDragStart}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -21,6 +21,7 @@ export default function ResizeDivider({ onDragStart }) {
         transition: 'background-color 0.15s, opacity 0.15s',
         position: 'relative',
         zIndex: 10,
+        touchAction: 'none',
       }}
       title="Drag to resize"
     />

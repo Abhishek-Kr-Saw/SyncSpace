@@ -160,11 +160,12 @@ async function* streamWithRetry(agent, input, config, maxRetries = 3) {
             console.log(`\n⏳ Rate limited (attempt ${attempt}/${maxRetries}). Sleeping ${waitSec}s...`);
             
             // Yield a custom event so the frontend knows we are rate limited and waiting
-            yield ["custom", { type: "tool_call", tool: "rate_limit_wait", status: "start", files: [`waiting ${waitSec}s`] }];
+            const id = Date.now().toString();
+            yield ["custom", { id, tool: "rate_limit_wait", status: "running", label: `Rate limit reached. Resuming in ${Math.ceil(waitSec)}s` }];
             
             await new Promise(r => setTimeout(r, waitSec * 1000));
             
-            yield ["custom", { type: "tool_call", tool: "rate_limit_wait", status: "end" }];
+            yield ["custom", { id, tool: "rate_limit_wait", status: "success", label: "Resumed from rate limit" }];
  
             // On retry, send empty messages — the checkpointer already has the
             // full conversation state, so the graph picks up from where it stopped.
