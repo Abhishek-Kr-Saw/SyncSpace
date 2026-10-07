@@ -204,10 +204,12 @@ function ToolRow({ item }) {
         )}
       </div>
       <div className="flex flex-col gap-0.5 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-        <span>{item.label}</span>
+        <span>{item.message || item.label}</span>
         {item.paths && item.paths.length > 0 && (
           <span className="opacity-70 truncate max-w-[200px] sm:max-w-[250px]">
-            {item.paths.length > 3 ? `${item.paths.length} files` : item.paths.join(', ')}
+            {item.paths.length > 3 
+              ? `${item.paths.slice(0, 3).join(', ')} +${item.paths.length - 3} more` 
+              : item.paths.join(', ')}
           </span>
         )}
       </div>

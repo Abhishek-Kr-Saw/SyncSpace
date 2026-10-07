@@ -66,25 +66,42 @@ agentRouter.post('/invoke', async(req,res) => {
         let currentMessageId = null;
         let currentMessageBuffer = "";
         let currentMessageHasToolCalls = false;
+        
+        let hasSentFinalMessage = false;
+        const updatedFiles = new Set();
 
         for await (const [mode, payload] of stream) {
             
             if (clientDisconnected) break;
 
             if (mode === "custom") {
-                const eventData = payload?.name === "tool_call" ? payload.data : payload;
-                res.write(`event: tool\ndata: ${JSON.stringify(eventData)}\n\n`);
+                console.log("CUSTOM EVENT PAYLOAD:", JSON.stringify(payload));
+                
+                let eventData = payload;
+                // dispatchCustomEvent in JS wraps the data
+                if (payload && payload.name && payload.data) {
+                    eventData = payload.data;
+                }
+                
+                if (eventData && eventData.tool) {
+                    if (eventData.tool === 'update_files' && eventData.paths) {
+                        eventData.paths.forEach(p => updatedFiles.add(p));
+                    }
+                    res.write(`event: tool\ndata: ${JSON.stringify(eventData)}\n\n`);
+                }
             } else if (mode === "messages") {
                 const [messageChunk, metadata] = payload;
                 
-                // Skip non-agent messages and tool messages
-                if (metadata?.langgraph_node !== 'agent' || messageChunk._getType?.() !== 'ai') {
+                // Accept only AI messages (skip tool, human, system messages)
+                const isAiMessage = (messageChunk?.constructor?.name === "AIMessageChunk") || (messageChunk?._getType?.() === 'ai') || (messageChunk?.type === 'ai');
+                if (!isAiMessage) {
                     continue;
                 }
                 
                 if (currentMessageId !== messageChunk.id) {
                     if (currentMessageId !== null && !currentMessageHasToolCalls && currentMessageBuffer.trim()) {
                         res.write(`event: message\ndata: ${JSON.stringify({ content: currentMessageBuffer })}\n\n`);
+                        hasSentFinalMessage = true;
                     }
                     currentMessageId = messageChunk.id;
                     currentMessageBuffer = "";
@@ -104,7 +121,16 @@ agentRouter.post('/invoke', async(req,res) => {
         if (!clientDisconnected) {
             if (currentMessageId !== null && !currentMessageHasToolCalls && currentMessageBuffer.trim()) {
                 res.write(`event: message\ndata: ${JSON.stringify({ content: currentMessageBuffer })}\n\n`);
+                hasSentFinalMessage = true;
             }
+            
+            // Fallback summary if model finishes without text after updating files
+            if (!hasSentFinalMessage && updatedFiles.size > 0) {
+                const fileList = Array.from(updatedFiles).map((f, i) => `${i + 1}. **${f.split('/').pop()}**`).join('\n');
+                const fallbackText = `I have successfully applied your changes.\n\n### Changes\n${fileList}\n\nLet me know if you need anything else!`;
+                res.write(`event: message\ndata: ${JSON.stringify({ content: fallbackText })}\n\n`);
+            }
+            
             console.log(`[DEBUG] Stream finished normally for project ${projectId}. Sending event: done.`);
             res.write('event: done\ndata: {}\n\n');
             res.end();

@@ -2,11 +2,10 @@ import "dotenv/config";
 
 import { ChatGroq } from "@langchain/groq";
 import { ChatMistralAI } from "@langchain/mistralai";
-import { ChatGoogle } from "@langchain/google/node"; 
-
-import { listFiles, readFiles, updateFiles } from "./tool.js";
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { ChatGoogle } from "@langchain/google/node";
 import { MemorySaver } from "@langchain/langgraph";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { listFiles, readFiles, updateFiles } from "./tool.js";
 
 
 // ─── Model registry ─────────────────────────────────────────────────────────
@@ -45,15 +44,12 @@ export function listAvailableModels() {
 }
 
 // ─── Agent ──────────────────────────────────────────────────────────────────
- 
+
 // In-memory checkpointer — saves agent state after each successful step.
 // On 429 retry, the agent resumes from the last checkpoint instead of
 // restarting the entire conversation from scratch.
 // Shared by every per-model agent; thread ids keep the runs separate.
 const checkpointer = new MemorySaver();
-
-
-
 
 
 const SYSTEM_PROMPT = `You are a senior frontend engineer AI that builds and edits polished, production-quality websites inside a live sandbox. You work exclusively on a React + Vite (JavaScript) project that already exists — you never scaffold a new project.
@@ -105,7 +101,13 @@ index.html, vite.config.js, package.json
 The user will describe, in one message, what kind of website or change they want (e.g. "build me a landing page for a coffee shop" or "add a testimonials section"). Treat each user message as the full spec for that task — infer sensible defaults for anything unstated rather than asking clarifying questions, unless the request is genuinely too ambiguous to act on.
 
 ## OUTPUT
-Your final reply to the user is a short confirmation of what you built or changed — never a code dump, never the raw tool output.`
+Your final reply to the user is a short confirmation of what you built or changed — never a code dump, never the raw tool output.
+When all edits are finished, write one short summary message (under 120 words). Format it using Markdown:
+1. A one- or two-sentence overview of the changes.
+2. A "Changes" heading (e.g. ### Changes), followed by a numbered list.
+3. Each list item must start with a **bold** file or feature name, use \`inline code\` for identifiers, and be only one or two lines long.
+4. A short closing line.
+Do not use emojis. Do not write this summary more than once. Do not narrate tool calls or echo file contents or directory lists between tool calls.`;
 
 
 const agents = new Map();
@@ -131,7 +133,7 @@ function getAgent(modelId) {
 // Retry-with-backoff for streaming that RESUMES via checkpointer, not restarts.
 async function* streamWithRetry(agent, input, config, maxRetries = 3) {
     let currentInput = input;
- 
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             const stream = await agent.stream(currentInput, config);
@@ -145,28 +147,28 @@ async function* streamWithRetry(agent, input, config, maxRetries = 3) {
                 || errMsg.includes("429")
                 || errMsg.includes("rate_limit")
                 || errMsg.includes("RateLimitError");
- 
+
             if (!isRateLimit || attempt === maxRetries) {
                 console.error(`\n❌ Agent failed permanently after ${attempt} attempt(s).`);
                 console.error(`   Error: ${errMsg.slice(0, 300)}`);
                 throw new Error(`Agent failed permanently: ${errMsg.slice(0, 300)}`);
             }
- 
+
             // Parse wait time from Groq error — match all known formats:
             const match = errMsg.match(/(?:try again in|retry after|Please retry after)\s*(\d+(?:\.\d+)?)\s*s/i);
             const rawWait = match ? parseFloat(match[1]) : null;
             const waitSec = rawWait !== null ? rawWait + 2 : 30; // +2s buffer; 30s default if unparseable
- 
+
             console.log(`\n⏳ Rate limited (attempt ${attempt}/${maxRetries}). Sleeping ${waitSec}s...`);
-            
+
             // Yield a custom event so the frontend knows we are rate limited and waiting
             const id = Date.now().toString();
-            yield ["custom", { id, tool: "rate_limit_wait", status: "running", label: `Rate limit reached. Resuming in ${Math.ceil(waitSec)}s` }];
-            
+            yield ["custom", { id, tool: "rate_limit_wait", status: "running", message: `Rate limit reached. Resuming in ${Math.ceil(waitSec)}s` }];
+
             await new Promise(r => setTimeout(r, waitSec * 1000));
-            
-            yield ["custom", { id, tool: "rate_limit_wait", status: "success", label: "Resumed from rate limit" }];
- 
+
+            yield ["custom", { id, tool: "rate_limit_wait", status: "success", message: "Resumed from rate limit" }];
+
             // On retry, send empty messages — the checkpointer already has the
             // full conversation state, so the graph picks up from where it stopped.
             currentInput = { messages: [] };
@@ -177,7 +179,7 @@ async function* streamWithRetry(agent, input, config, maxRetries = 3) {
 export async function runAgent(userMessage, projectId, modelId = DEFAULT_MODEL) {
     const threadId = `task-${projectId}-${Date.now()}`;
     const agent = getAgent(modelId);
-    
+
     return streamWithRetry(
         agent,
         { messages: [{ role: "user", content: userMessage }] },

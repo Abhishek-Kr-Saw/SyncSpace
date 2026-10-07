@@ -7,13 +7,13 @@ const readCache = new Map();
 
 export const listFiles = tool(
     async({ }, config) => {
-        const id = Date.now().toString();
-        await dispatchCustomEvent("tool_call", { id, tool: "list_files", status: "running", label: "Listing files..." }, config);
+        const id = Math.random().toString(36).substring(2);
+        await dispatchCustomEvent("tool_call", { id, tool: "list_files", status: "running", message: "Listing files" }, config);
 
         const projectId = config.configurable?.projectId;
         const response = await axios.get(`http://sandbox-service-${projectId}:3000/list-files`);
 
-        await dispatchCustomEvent("tool_call", { id, tool: "list_files", status: "success", label: "Files listed successfully." }, config);
+        await dispatchCustomEvent("tool_call", { id, tool: "list_files", status: "success", message: "Files listed successfully." }, config);
         return JSON.stringify(response.data.files);
     },
     {
@@ -26,8 +26,8 @@ export const listFiles = tool(
 
 export const readFiles = tool(
     async ({ files }, config) => {
-        const id = Date.now().toString();
-        await dispatchCustomEvent("tool_call", { id, tool: "read_files", status: "running", label: "Reading files...", paths: files }, config);
+        const id = Math.random().toString(36).substring(2);
+        await dispatchCustomEvent("tool_call", { id, tool: "read_files", status: "running", message: `Reading files`, paths: files.map(f => f.split('/').pop()) }, config);
 
         // Scope cache by thread_id so different projects don't collide
         const threadId = config.configurable?.thread_id || '';
@@ -56,7 +56,7 @@ export const readFiles = tool(
                 }
             }
         }
-        await dispatchCustomEvent("tool_call", { id, tool: "read_files", status: "success", label: "Files read successfully." }, config);
+        await dispatchCustomEvent("tool_call", { id, tool: "read_files", status: "success", message: "Files read successfully." }, config);
         return JSON.stringify({ message: "File contents", files: results });
     },
     {
@@ -72,13 +72,13 @@ export const readFiles = tool(
 export const updateFiles = tool(
     async ({ files }, config) => {
         const fileNames = files.map(f => f.file);
-        const id = Date.now().toString();
-        await dispatchCustomEvent("tool_call", { id, tool: "update_files", status: "running", label: "Updating files...", paths: fileNames }, config);
+        const id = Math.random().toString(36).substring(2);
+        await dispatchCustomEvent("tool_call", { id, tool: "update_files", status: "running", message: `Updating files`, paths: fileNames.map(f => f.split('/').pop()) }, config);
 
         const projectId = config.configurable?.projectId;
         const response = await axios.patch(`http://sandbox-service-${projectId}:3000/update-files`, {files});
 
-        await dispatchCustomEvent("tool_call", { id, tool: "update_files", status: "success", label: "Files updated successfully." }, config);
+        await dispatchCustomEvent("tool_call", { id, tool: "update_files", status: "success", message: "Files updated successfully." }, config);
 
         return JSON.stringify(response.data);
     },
