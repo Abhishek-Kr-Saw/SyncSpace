@@ -234,6 +234,8 @@ export default function ChatPanel({ onToolEvent }) {
   const inputRef = useRef(null);
 
 
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState(() => {
     try { return localStorage.getItem('syncspace_model') || ''; } catch { return ''; }
@@ -263,6 +265,44 @@ export default function ChatPanel({ onToolEvent }) {
     try { localStorage.setItem('syncspace_model', e.target.value); } catch { /* ignore */ }
   }
 
+  // Load history
+  useEffect(() => {
+    if (!sandboxId) return;
+    let cancelled = false;
+    setIsLoadingHistory(true);
+    fetch(`http://localhost:3000/api/ai/history/${sandboxId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return;
+        if (data && data.history) {
+          const loadedMessages = data.history.map(item => {
+            if (item.type === 'user' || item.type === 'assistant') {
+              const role = item.type === 'user' ? 'user' : 'assistant';
+              return { type: 'message', role, content: item.content, timestamp: new Date(item.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
+            } else {
+              return { type: 'tool', id: item.eventId, tool: item.tool, status: item.status, message: item.message, paths: item.paths || [] };
+            }
+          });
+          setMessages(loadedMessages);
+        }
+      })
+      .catch(err => console.error("Failed to load history:", err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingHistory(false);
+      });
+      
+    return () => { cancelled = true; };
+  }, [sandboxId]);
+
+  const handleClearChat = async () => {
+    if (!sandboxId || isStreaming) return;
+    try {
+      await fetch(`http://localhost:3000/api/ai/history/${sandboxId}`, { method: 'DELETE' });
+      setMessages([]);
+    } catch (e) {
+      console.error("Failed to clear chat", e);
+    }
+  };
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -396,12 +436,23 @@ export default function ChatPanel({ onToolEvent }) {
               Working...
             </span>
           )}
+          <button
+            onClick={handleClearChat}
+            disabled={isStreaming || messages.length === 0}
+            title="Clear Chat"
+            className="p-1.5 rounded text-red-500 hover:bg-white/5 transition-colors disabled:opacity-30 flex items-center justify-center ml-2"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
         </div>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 chat-scrollbar">
-        {messages.length === 0 && (
+        {isLoadingHistory && (
+          <div className="text-center text-xs py-4" style={{ color: 'var(--text-muted)' }}>Loading history...</div>
+        )}
+        {!isLoadingHistory && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity="0.3">
               <path d="M16 2C8.27 2 2 7.16 2 13.5c0 3.66 2.12 6.88 5.4 9L6 28l6.36-3.18c1.12.24 2.36.38 3.64.38 7.73 0 14-5.16 14-11.5S23.73 2 16 2z" stroke="var(--text-muted)" strokeWidth="1.5" fill="none" />

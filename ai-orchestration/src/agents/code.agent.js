@@ -5,7 +5,9 @@ import { ChatMistralAI } from "@langchain/mistralai";
 import { ChatGoogle } from "@langchain/google/node";
 import { MemorySaver } from "@langchain/langgraph";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { listFiles, readFiles, updateFiles } from "./tool.js";
+import { checkpointer } from "../db.js";
 
 
 // ─── Model registry ─────────────────────────────────────────────────────────
@@ -43,13 +45,7 @@ export function listAvailableModels() {
         .map(([id, m]) => ({ id, label: m.label, provider: m.provider }));
 }
 
-// ─── Agent ──────────────────────────────────────────────────────────────────
-
-// In-memory checkpointer — saves agent state after each successful step.
-// On 429 retry, the agent resumes from the last checkpoint instead of
-// restarting the entire conversation from scratch.
-// Shared by every per-model agent; thread ids keep the runs separate.
-const checkpointer = new MemorySaver();
+// Checkpointer is imported from db.js
 
 
 const SYSTEM_PROMPT = `You are a senior frontend engineer AI that builds and edits polished, production-quality websites inside a live sandbox. You work exclusively on a React + Vite (JavaScript) project that already exists — you never scaffold a new project.
@@ -123,7 +119,34 @@ function getAgent(modelId) {
             llm: MODELS[modelId].create(),
             tools: [listFiles, readFiles, updateFiles],
             checkpointer,
-            prompt: SYSTEM_PROMPT,
+            stateModifier: (state) => {
+                const systemMsg = new SystemMessage(SYSTEM_PROMPT);
+                let messages = state.messages || [];
+                
+                // Trim messages: keep last 20, but don't split tool calls from results.
+                let trimmed = messages;
+                if (trimmed.length > 20) {
+                    trimmed = trimmed.slice(trimmed.length - 20);
+                    while (trimmed.length > 0 && trimmed[0]._getType?.() === 'tool') {
+                        trimmed.shift();
+                    }
+                }
+                
+                // Replace large tool outputs in older turns (not the very last ones)
+                const modifiedMessages = trimmed.map((msg, index) => {
+                    if (msg._getType?.() === 'tool' && index < trimmed.length - 10) {
+                        if (msg.content && msg.content.length > 500) {
+                            return new ToolMessage({
+                                ...msg,
+                                content: `[Content truncated from history. It was ${msg.content.length} characters long.]`
+                            });
+                        }
+                    }
+                    return msg;
+                });
+                
+                return [systemMsg, ...modifiedMessages];
+            },
         }).withConfig({ recursionLimit: 100 }));
     }
     return agents.get(modelId);
@@ -177,14 +200,15 @@ async function* streamWithRetry(agent, input, config, maxRetries = 3) {
 }
 
 export async function runAgent(userMessage, projectId, modelId = DEFAULT_MODEL) {
-    const threadId = `task-${projectId}-${Date.now()}`;
+    const threadId = `project-${projectId}`;
+    const runId = Date.now().toString(); // unique run id to reset caches
     const agent = getAgent(modelId);
 
     return streamWithRetry(
         agent,
         { messages: [{ role: "user", content: userMessage }] },
         {
-            configurable: { thread_id: threadId, projectId },
+            configurable: { thread_id: threadId, projectId, run_id: runId },
             streamMode: ["custom", "messages"],
         }
     );

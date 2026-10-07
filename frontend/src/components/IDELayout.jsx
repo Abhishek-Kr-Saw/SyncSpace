@@ -16,7 +16,7 @@ const PANE_CONSTRAINTS = [
  * Main IDE layout — three-column flex grid with drag-to-resize dividers:
  * File Explorer | Chat Panel | Right Panel (Preview/Code/Terminal)
  */
-export default function IDELayout() {
+export default function IDELayout({ onGoHome }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [activeRightTab, setActiveRightTab] = useState('preview');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -58,6 +58,7 @@ export default function IDELayout() {
         style={{
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           padding: '8px 16px',
           flexShrink: 0,
           backgroundColor: 'var(--bg-secondary)',
@@ -82,6 +83,21 @@ export default function IDELayout() {
             </>
           )}
         </div>
+        
+        <button
+          onClick={onGoHome}
+          className="px-3 py-1.5 rounded-md flex items-center gap-2 text-sm transition-colors"
+          style={{ 
+            color: 'var(--text-secondary)',
+            backgroundColor: 'transparent',
+            border: '1px solid var(--border)'
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.backgroundColor = 'var(--bg-elevated)'; }}
+          onMouseOut={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          Back to Home
+        </button>
       </header>
 
       {/* Main content */}

@@ -29,9 +29,9 @@ export const readFiles = tool(
         const id = Math.random().toString(36).substring(2);
         await dispatchCustomEvent("tool_call", { id, tool: "read_files", status: "running", message: `Reading files`, paths: files.map(f => f.split('/').pop()) }, config);
 
-        // Scope cache by thread_id so different projects don't collide
-        const threadId = config.configurable?.thread_id || '';
-        const scopedKey = (f) => `${threadId}:${f}`;
+        // Scope cache by run_id so each new chat message re-reads current files
+        const runId = config.configurable?.run_id || '';
+        const scopedKey = (f) => `${runId}:${f}`;
 
         const uncachedFiles = files.filter(f => !readCache.has(scopedKey(f)));
         const results = {};

@@ -91,7 +91,10 @@ function AppContent() {
     case 'loading':
       return <LoadingScreen />;
     case 'ide':
-      return <IDELayout />;
+      return <IDELayout onGoHome={() => {
+        clearSession();
+        setAppState('landing');
+      }} />;
     default:
       return (
         <LandingScreen

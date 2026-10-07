@@ -1,7 +1,43 @@
 import { Router } from 'express';
 import { runAgent, listAvailableModels, DEFAULT_MODEL } from '../agents/code.agent.js';
+import { HistoryEvent, mongoClient } from '../db.js';
 
 const agentRouter = Router();
+
+import mongoose from 'mongoose';
+
+agentRouter.get('/history/:projectId', async (req, res) => {
+    try {
+        if (mongoose.connection.readyState !== 1) {
+            return res.json({ history: [] });
+        }
+        const history = await HistoryEvent.find({ projectId: req.params.projectId }).sort({ createdAt: 1 });
+        res.json({ history });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch history" });
+    }
+});
+
+agentRouter.delete('/history/:projectId', async (req, res) => {
+    try {
+        if (mongoose.connection.readyState !== 1) {
+            return res.json({ success: true });
+        }
+        const projectId = req.params.projectId;
+        await HistoryEvent.deleteMany({ projectId });
+        
+        if (mongoClient) {
+           const db = mongoClient.db();
+           await db.collection("checkpoints").deleteMany({ thread_id: `project-${projectId}` }).catch(e => console.error(e));
+           await db.collection("checkpoint_blobs").deleteMany({ thread_id: `project-${projectId}` }).catch(e => console.error(e));
+           await db.collection("checkpoint_writes").deleteMany({ thread_id: `project-${projectId}` }).catch(e => console.error(e));
+        }
+        
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to clear history" });
+    }
+});
 
 // Short, key-safe description of a provider error, e.g. "429: Too Many Requests"
 function describeError(err) {
@@ -61,6 +97,14 @@ agentRouter.post('/invoke', async(req,res) => {
             }
         });
 
+        const saveAssistantMessage = (content) => {
+            const eventId = Date.now().toString() + Math.random().toString(36).substring(2);
+            HistoryEvent.create({ projectId, eventId, type: 'assistant', content }).catch(e => console.error("Failed to save AI msg", e));
+        };
+
+        const userEventId = Date.now().toString() + Math.random().toString(36).substring(2);
+        HistoryEvent.create({ projectId, eventId: userEventId, type: 'user', content: message }).catch(e => console.error(e));
+
         let stream = await runAgent(message, projectId,modelId);
 
         let currentMessageId = null;
@@ -88,6 +132,19 @@ agentRouter.post('/invoke', async(req,res) => {
                         eventData.paths.forEach(p => updatedFiles.add(p));
                     }
                     res.write(`event: tool\ndata: ${JSON.stringify(eventData)}\n\n`);
+                    
+                    const type = eventData.tool === 'rate_limit_wait' ? 'rate_limit' : 'tool';
+                    HistoryEvent.findOneAndUpdate(
+                        { projectId, eventId: eventData.id },
+                        {
+                            type,
+                            tool: eventData.tool,
+                            status: eventData.status,
+                            message: eventData.message,
+                            paths: eventData.paths || []
+                        },
+                        { upsert: true, new: true, setDefaultsOnInsert: true }
+                    ).catch(e => console.error("Failed to save tool event to history", e));
                 }
             } else if (mode === "messages") {
                 const [messageChunk, metadata] = payload;
@@ -101,6 +158,7 @@ agentRouter.post('/invoke', async(req,res) => {
                 if (currentMessageId !== messageChunk.id) {
                     if (currentMessageId !== null && !currentMessageHasToolCalls && currentMessageBuffer.trim()) {
                         res.write(`event: message\ndata: ${JSON.stringify({ content: currentMessageBuffer })}\n\n`);
+                        saveAssistantMessage(currentMessageBuffer);
                         hasSentFinalMessage = true;
                     }
                     currentMessageId = messageChunk.id;
@@ -121,6 +179,7 @@ agentRouter.post('/invoke', async(req,res) => {
         if (!clientDisconnected) {
             if (currentMessageId !== null && !currentMessageHasToolCalls && currentMessageBuffer.trim()) {
                 res.write(`event: message\ndata: ${JSON.stringify({ content: currentMessageBuffer })}\n\n`);
+                saveAssistantMessage(currentMessageBuffer);
                 hasSentFinalMessage = true;
             }
             
@@ -129,6 +188,7 @@ agentRouter.post('/invoke', async(req,res) => {
                 const fileList = Array.from(updatedFiles).map((f, i) => `${i + 1}. **${f.split('/').pop()}**`).join('\n');
                 const fallbackText = `I have successfully applied your changes.\n\n### Changes\n${fileList}\n\nLet me know if you need anything else!`;
                 res.write(`event: message\ndata: ${JSON.stringify({ content: fallbackText })}\n\n`);
+                saveAssistantMessage(fallbackText);
             }
             
             console.log(`[DEBUG] Stream finished normally for project ${projectId}. Sending event: done.`);
