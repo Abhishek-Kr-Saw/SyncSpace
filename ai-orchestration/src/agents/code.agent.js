@@ -1,7 +1,6 @@
 import "dotenv/config";
 
 import { ChatGroq } from "@langchain/groq";
-import { ChatMistralAI } from "@langchain/mistralai";
 import { ChatGoogle } from "@langchain/google/node";
 import { MemorySaver } from "@langchain/langgraph";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
@@ -20,12 +19,6 @@ const MODELS = {
         provider: "groq",
         envKey: "GROQ_API_KEY",
         create: () => new ChatGroq({ model: "openai/gpt-oss-120b", apiKey: process.env.GROQ_API_KEY, temperature: 0, maxRetries: 0 }),
-    },
-    "mistral/small": {
-        label: "Mistral Small",
-        provider: "mistral",
-        envKey: "MISTRAL_API_KEY",
-        create: () => new ChatMistralAI({ model: "mistral-small-latest", apiKey: process.env.MISTRAL_API_KEY, temperature: 0, maxRetries: 0 }),
     },
     "google/gemini-flash": {
         label: "Gemini Flash (Google)",
