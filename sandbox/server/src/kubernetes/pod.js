@@ -39,8 +39,8 @@ export async function createPod(sandboxId, projectId){
                     name: "sandbox-container",
                     ports: [ { containerPort: 5173 , name: 'http' }],
                     resources: {
-                        limits: { cpu: "500m", memory: "1Gi" },
-                        requests: { cpu: "250m", memory: "500Mi"}
+                        limits: { cpu: "500m", memory: "512Mi" },
+                        requests: { cpu: "50m", memory: "128Mi"}
                     },
                     volumeMounts: [
                         {
@@ -55,8 +55,8 @@ export async function createPod(sandboxId, projectId){
                     name: "agent-container",
                     ports: [ { containerPort: 3000 , name: 'http' }],
                     resources: {
-                        limits: { cpu: "500m", memory: "1Gi" },
-                        requests: { cpu: "250m", memory: "500Mi"}
+                        limits: { cpu: "250m", memory: "256Mi" },
+                        requests: { cpu: "50m", memory: "100Mi"}
                     },
                     volumeMounts: [
                         {
@@ -71,8 +71,8 @@ export async function createPod(sandboxId, projectId){
                     name: 'sync-agent-container',
                     ports: [ { containerPort: 4000, name: "http" } ],
                     resources: {
-                        limits: { cpu: "500m", memory: "1Gi" },
-                        requests: { cpu: "250m", memory: "500Mi" }
+                        limits: { cpu: "250m", memory: "128Mi" },
+                        requests: { cpu: "50m", memory: "64Mi" }
                     },
                     volumeMounts: [
                         {
@@ -132,8 +132,7 @@ export async function createPod(sandboxId, projectId){
 export async function deletePod(sandboxId) {
     const response = await k8sCoreV1Api.deleteNamespacedPod({
         namespace: 'default',
-        name: `sandbox-pod-${sandboxId}`
-    }, {
+        name: `sandbox-pod-${sandboxId}`,
         gracePeriodSeconds: 0,
     })
 

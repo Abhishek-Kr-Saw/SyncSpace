@@ -18,8 +18,39 @@ app.get('/api/status/readyz', (req,res) => {
     res.status(200).json({ status: 'ready' })
 })
 
+app.use((req, res, next) => {
+    const origin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    next();
+});
+
 const proxies = {}
 const agentProxies = {}
+
+function sendProxyError(res, req, sandboxId, serviceType, err) {
+    if (res && 'writeHead' in res && !res.headersSent) {
+        const origin = req.headers.origin || '*';
+        res.writeHead(503, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': '*',
+        });
+        res.end(JSON.stringify({
+            error: `Sandbox ${serviceType} is not ready yet`,
+            sandboxId,
+            message: err.message
+        }));
+    }
+}
 
 function getProxies(sandboxId){
 
@@ -28,7 +59,13 @@ function getProxies(sandboxId){
     if (!proxies[sandboxId]){
         proxies[ sandboxId ] = createProxyMiddleware({
             target,
-            changeOrigin: true
+            changeOrigin: true,
+            on: {
+                error: (err, req, res) => {
+                    console.error(`Preview proxy error for ${sandboxId}:`, err.message);
+                    sendProxyError(res, req, sandboxId, 'preview', err);
+                }
+            }
         })
     }
 
@@ -42,7 +79,13 @@ function getAgentProxies(sandboxId){
     if (!agentProxies[sandboxId]){
         agentProxies[ sandboxId ] = createProxyMiddleware({
             target,
-            changeOrigin: true
+            changeOrigin: true,
+            on: {
+                error: (err, req, res) => {
+                    console.error(`Agent proxy error for ${sandboxId}:`, err.message);
+                    sendProxyError(res, req, sandboxId, 'agent', err);
+                }
+            }
         })
     }
 
@@ -70,7 +113,11 @@ app.use(async (req, res, next) => {
 
     console.log(`WS upgrade request: ${host}, sandboxId: ${sandboxId}, type: ${type}`);
 
-    await refreshTTL(sandboxId)
+    try {
+        await refreshTTL(sandboxId);
+    } catch (err) {
+        console.error(`Failed to refresh TTL for ${sandboxId}:`, err.message);
+    }
 
     if (type === 'agent') {
         return getAgentProxies(sandboxId)(req, res, next);
