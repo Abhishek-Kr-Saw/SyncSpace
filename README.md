@@ -1,15 +1,17 @@
 # SyncSpace — AI-Powered Cloud Sandbox IDE
 
-[Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
-[React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-[Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
-[Tailwind](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white)
-[Kubernetes](https://img.shields.io/badge/Kubernetes-1.28+-326CE5?logo=kubernetes&logoColor=white)
-[Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED?logo=docker&logoColor=white)
-[MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
-[Redis](https://img.shields.io/badge/Redis-TTL-DC382D?logo=redis&logoColor=white)
-[RabbitMQ](https://img.shields.io/badge/RabbitMQ-queue-FF6600?logo=rabbitmq&logoColor=white)
-[Build](https://img.shields.io/badge/build-skaffold-00ADD8)
+![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
+![Tailwind](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-1.28+-326CE5?logo=kubernetes&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED?logo=docker&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-TTL-DC382D?logo=redis&logoColor=white)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-queue-FF6600?logo=rabbitmq&logoColor=white)
+![LangChain](https://img.shields.io/badge/LangChain-LangGraph-1C3C3C?logo=langchain)
+![Models](https://img.shields.io/badge/models-Groq%20%7C%20Mistral%20%7C%20Gemini-8A2BE2)
+![Build](https://img.shields.io/badge/build-skaffold-00ADD8)
 
 ---
 
@@ -20,482 +22,812 @@
 3. [High-Level Architecture](#3-high-level-architecture)
 4. [Microservices Breakdown](#4-microservices-breakdown)
 5. [Sandbox Lifecycle](#5-sandbox-lifecycle)
-6. [Developer Setup & Local Development](#6-developer-setup--local-development)
-7. [Environment Variables Reference](#7-environment-variables-reference)
-8. [API Overview](#8-api-overview)
-9. [Deployment](#9-deployment)
-10. [Security Considerations](#10-security-considerations)
-11. [Roadmap & Known Limitations](#11-roadmap--known-limitations)
-12. [Contributing](#12-contributing)
-13. [License](#13-license)
+6. [AI Code Editing Layer](#6-ai-code-editing-layer)
+7. [Data Models & Schemas](#7-data-models--schemas)
+8. [Kubernetes Cluster Design](#8-kubernetes-cluster-design)
+9. [Developer Setup & Local Development](#9-developer-setup--local-development)
+10. [Environment Variables Reference](#10-environment-variables-reference)
+11. [API Reference](#11-api-reference)
+12. [CI/CD Pipeline](#12-cicd-pipeline)
+13. [Security Considerations](#13-security-considerations)
+14. [Observability](#14-observability)
+15. [Roadmap & Known Limitations](#15-roadmap--known-limitations)
+16. [Contributing Guide](#16-contributing-guide)
+17. [License](#17-license)
 
 ---
 
 ## 1. Executive Summary
 
-SyncSpace is a browser-based cloud IDE for AI-assisted software development. It provisions an isolated sandbox for each project session, gives the user a live preview, terminal access, and a file-editing interface, and pairs that with an AI orchestration layer that can read and update project files in the workspace.
+**SyncSpace** is a browser-based cloud IDE that provisions an isolated, disposable React + Vite sandbox for each user session inside a Kubernetes cluster. Every sandbox is a dedicated pod seeded with a starter template. The user works in an IDE-style interface with a live preview pane, a file explorer, a code viewer, an integrated terminal, and an AI chat panel.
 
-The platform is designed for developers who want a frictionless coding environment without setting up a local toolchain. A user can sign in with Google, create or restore a project, launch a sandbox, and interact with a code agent that edits the workspace in real time.
+The AI agent is built with **LangChain + LangGraph** and can be backed by **Groq, Mistral, or Gemini** models, selectable from a dropdown in the chat panel. It lists, reads, and updates files directly inside the running pod. Vite's hot module replacement then updates the preview without a full reload, so the user watches the app being built in the same tab.
 
-The core product idea is simple:
+**Target users:** Frontend developers, students, and educators who want a zero-setup coding environment with AI assistance and no local install.
 
-- sign in securely
-- create or open a project
-- launch a sandbox environment
-- use an AI agent for coding help
-- preview the app live in the browser
-- use terminal/file APIs inside the sandbox
-
-This monorepo combines:
-
-- a React + Vite front end
-- secure auth services with Passport and JWT
-- an AI orchestration layer for streaming responses and project memory
-- dynamic sandbox orchestration in Kubernetes
-- notification processing for auth events
-- local dev support via Skaffold and Docker
+**Core value proposition:** Sign in with Google, start a sandbox in one click, describe what you want in plain English, and watch the AI write the code and hot-reload it live.
 
 ---
 
 ## 2. Features
 
-### Authentication
-- Google OAuth 2.0 login
-- JWT issuance through secure HTTP-only cookies
-- MongoDB-backed user persistence
-- auth events published to a messaging layer
-
-### Sandbox Environment
-- one-click creation of an isolated workspace
-- dedicated preview route and agent route per sandbox
-- live terminal access using a PTY shell
-- file listing, creation, reading, and update APIs
-- persistent workspace session for code editing
-
-### AI Workflows
-- AI orchestration service exposes chat and model APIs
-- project and history tracking
-- streaming responses to the front end
-- file operations for agent-based editing
-- configurable model selection when configured in the environment
-
-### Developer Experience
-- IDE-like layout with file explorer, code panel, preview pane, and chat
-- restore session state from browser storage
-- socket-based terminal streaming
-- Vite-friendly live preview experience for frontend apps
-
-### Deployment & Operations
-- Dockerized service architecture
-- Kubernetes manifests for runtime deployment
-- Skaffold-based local orchestration
-- Redis TTL for lifecycle management and sandbox cleanup
-- RabbitMQ-style queue consumption for asynchronous notifications
+| Area | Feature |
+|---|---|
+| **Authentication** | Google OAuth 2.0 sign-in (Passport), JWT issued as an `httpOnly` cookie, user records persisted in MongoDB |
+| **Sandboxes** | One-click, per-user, ephemeral pods created on demand through the Kubernetes API |
+| **Live preview** | Sandbox app served on its own subdomain (`<id>.preview.localhost`) with working HMR over WebSockets |
+| **AI agent** | LangGraph ReAct agent with `list_files`, `read_files`, and `update_files` tools that edit the real workspace |
+| **Multi-model** | Model registry (Groq gpt-oss-120b, Mistral Small, Gemini Flash) exposed through `GET /api/ai/models`; the chosen model is remembered in the browser |
+| **Streaming chat** | Server-Sent Events stream agent responses; tool activity (listing, reading, updating files) appears under the user's message as it happens |
+| **Resilience** | Retry with backoff using a `MemorySaver` checkpointer, so a Groq `429` rate-limit resumes from the last checkpoint instead of restarting |
+| **Terminal** | Real PTY shell inside the sandbox (`node-pty`) rendered with xterm.js over Socket.IO |
+| **File tools** | List, read, create, and update files in the workspace over a REST API |
+| **IDE UI** | Resizable panes, file explorer, code viewer, preview iframe, tool-activity chips, loading and landing screens |
+| **Session restore** | The active sandbox is stored in `sessionStorage` and restored after a liveness probe of the agent |
+| **Auto cleanup** | Redis TTL keys expire idle sandboxes; the sandbox server then deletes the pod and service |
+| **Notifications** | Login events published to RabbitMQ and sent as emails by a separate notification service |
+| **Deployment** | Dockerized services, Kubernetes manifests, nginx Ingress, RBAC, and Skaffold for dev |
 
 ---
 
 ## 3. High-Level Architecture
 
-```text
-+---------------------------+
-| Browser / Frontend        |
-| React App                 |
-| Landing / IDE / Preview    |
-| Terminal / Chat            |
-+-------------+-------------+
-              |
-              v
-+-------------+-------------+
-| Frontend Service          |
-| React + Vite              |
-+-------------+-------------+
-              |
-       +------v------+
-       | Auth Service |
-       | Express +    |
-       | Passport +   |
-       | JWT          |
-       +------+-------+
-              |
-         +----v----+
-         | MongoDB |
-         +---------+
+SyncSpace is organized into five layers: a client layer, an edge layer, application services, a data and messaging layer, and an isolated sandbox runtime.
 
-       +------v------+
-       | AI Service  |
-       | Orchestration|
-       | + project   |
-       | history     |
-       +------+------+
-              |
-             +v+
-             | LLM |
-             +---+
+```mermaid
+flowchart TB
+    subgraph CLIENT["Client Layer"]
+        direction LR
+        BR["<b>Browser</b><br/>React 19 SPA<br/>Landing · IDE · Preview · Terminal · AI Chat"]
+    end
 
-       +------v------+
-       | Sandbox API |
-       | project +   |
-       | sandbox ops |
-       +------+------+
-              |
-              v
-       +------v------+
-       | Redis       |
-       | TTL / state |
-       +-------------+
+    subgraph EDGE["Edge Layer — Kubernetes"]
+        direction LR
+        ING["<b>NGINX Ingress</b><br/>Path routing: /api/*<br/>Wildcard hosts: *.preview, *.agent<br/>Sticky sessions · SSE/WebSocket timeouts"]
+        FE["<b>Frontend Service</b><br/>nginx · static React build"]
+    end
 
-       +------v------+
-       | Router      |
-       | Host-based  |
-       | proxy       |
-       +------+------+ 
-              |
-              v
-+-------------+-------------+
-| Kubernetes Sandbox Runtime |
-| Sandbox Pod / Preview App |
-| Agent + Terminal API      |
-+-------------+-------------+
-              |
-              v
-        +-----v-----+
-        | Live App  |
-        | Preview   |
-        +-----------+
+    subgraph APP["Application Services"]
+        direction LR
+        AUTH["<b>Auth Service</b><br/>Express · Passport (Google OAuth)<br/>JWT cookie sessions"]
+        AI["<b>AI Orchestration Service</b><br/>LangGraph ReAct agent<br/>Multi-model · SSE streaming<br/>Project history"]
+        SBAPI["<b>Sandbox API</b><br/>Project and sandbox lifecycle<br/>Pod / Service provisioning"]
+        ROUTER["<b>Sandbox Router</b><br/>Host-based reverse proxy<br/>HTTP + WebSocket upgrade"]
+        NOTI["<b>Notification Service</b><br/>Queue consumer<br/>Email delivery"]
+    end
 
-              |
-       +------v------+
-       | Notification |
-       | Service     |
-       +------+------+
-              |
-              v
-          +---v---+
-          | RabbitMQ |
-          +---------+
+    subgraph DATA["Data and Messaging Layer"]
+        direction LR
+        MONGO[("<b>MongoDB</b><br/>Users")]
+        REDIS[("<b>Redis</b><br/>Sandbox state · TTL")]
+        MQ[("<b>RabbitMQ</b><br/>auth_notification_queue")]
+    end
+
+    subgraph RUNTIME["Sandbox Runtime — one isolated pod per session"]
+        direction LR
+        subgraph POD["Sandbox Pod"]
+            direction LR
+            AGENT["<b>Agent Container</b><br/>File API · PTY terminal<br/>Socket.IO"]
+            VITE["<b>Template Container</b><br/>Vite dev server · HMR"]
+            VOL[("Shared workspace<br/>emptyDir")]
+        end
+        PREVIEW["<b>Live App Preview</b>"]
+    end
+
+    subgraph EXT["External Services"]
+        direction LR
+        LLM["<b>LLM Providers</b><br/>Groq · Mistral · Gemini"]
+        MAIL["<b>Gmail SMTP</b><br/>OAuth2"]
+        K8S["<b>Kubernetes API</b>"]
+    end
+
+    BR -->|"HTTPS"| ING
+    ING -->|"/"| FE
+    ING -->|"/api/auth"| AUTH
+    ING -->|"/api/ai"| AI
+    ING -->|"/api/sandbox"| SBAPI
+    ING -->|"*.preview · *.agent"| ROUTER
+
+    AUTH --> MONGO
+    AUTH -->|"publish login event"| MQ
+    MQ -->|"consume"| NOTI
+    NOTI --> MAIL
+
+    AI --> LLM
+    AI -->|"list / read / update files"| AGENT
+    SBAPI -->|"create / delete pod + service"| K8S
+    SBAPI -->|"register TTL key"| REDIS
+    REDIS -.->|"expiry event → cleanup"| SBAPI
+    ROUTER -->|"refresh TTL"| REDIS
+
+    K8S -.->|"provisions"| POD
+    ROUTER -->|"preview traffic"| VITE
+    ROUTER -->|"agent traffic"| AGENT
+    AGENT --- VOL
+    VITE --- VOL
+    VITE --> PREVIEW
+
+    classDef client fill:#E8F1FF,stroke:#2F6FED,color:#0B2A5B
+    classDef edge fill:#EEF7EE,stroke:#3B8F3B,color:#123B12
+    classDef app fill:#FFF6E5,stroke:#D98E04,color:#4A3000
+    classDef data fill:#F3ECFF,stroke:#7B4FD1,color:#2A1458
+    classDef runtime fill:#FDECEC,stroke:#D64545,color:#4A1010
+    classDef ext fill:#F2F2F2,stroke:#7A7A7A,color:#222222
+
+    class BR client
+    class ING,FE edge
+    class AUTH,AI,SBAPI,ROUTER,NOTI app
+    class MONGO,REDIS,MQ data
+    class AGENT,VITE,VOL,PREVIEW runtime
+    class LLM,MAIL,K8S ext
 ```
 
-At a high level, the frontend communicates with the auth, sandbox, and AI services. These services connect to MongoDB, Redis, RabbitMQ, and the Kubernetes API for sandbox provisioning, while the router service directs traffic based on the incoming host and sandbox ID so each project instance gets a consistent preview or agent endpoint.
+### 3.1 Layer Responsibilities
+
+| Layer | Components | Responsibility |
+|---|---|---|
+| **Client** | React SPA | Landing, IDE workspace, live preview, terminal, and AI chat |
+| **Edge** | NGINX Ingress, Frontend Service | Single entry point; path-based and wildcard-host routing; serves the static build |
+| **Application** | Auth, AI Orchestration, Sandbox API, Router, Notification | Identity, AI agent execution, sandbox provisioning, traffic routing, and event-driven notifications |
+| **Data & Messaging** | MongoDB, Redis, RabbitMQ | User persistence, sandbox state and TTL, and asynchronous events |
+| **Sandbox Runtime** | Sandbox pod (agent + template containers) | Isolated execution of user projects with file access, terminal, and live preview |
+| **External** | LLM providers, Gmail SMTP, Kubernetes API | Model inference, email delivery, and cluster resource management |
+
+### 3.2 Core Request Flows
+
+| Flow | Path |
+|---|---|
+| **Sign-in** | Browser → Ingress → Auth → MongoDB; Auth → RabbitMQ → Notification → Gmail SMTP |
+| **Create sandbox** | Browser → Ingress → Sandbox API → Kubernetes API (pod + service) and Redis (TTL key) |
+| **AI edit** | Browser → Ingress → AI Orchestration → LLM; AI Orchestration → Sandbox Agent (file tools) → shared workspace → Vite HMR → preview |
+| **Live preview** | Browser → Ingress → Router → Vite dev server in the sandbox pod |
+| **Terminal** | Browser → Ingress → Router → Agent (Socket.IO + PTY) |
+| **Idle cleanup** | Router refreshes the Redis TTL on each request; on expiry, Sandbox API deletes the pod and service |
 
 ---
 
 ## 4. Microservices Breakdown
 
-### 4.1 Frontend
-Location: `frontend/`
+### 4.1 Auth Service
 
-The frontend is a Vite-powered React application that provides:
+| Field | Value |
+|---|---|
+| **Directory** | `auth/` |
+| **Responsibility** | Google OAuth 2.0 login, JWT issuance, user persistence, login-event dispatch |
+| **Runtime** | Node.js 20 / ES Modules, Express |
+| **Port** | 3000 |
+| **Dockerfile** | `auth/dockerfile` (`node:20-alpine`) |
+| **K8s** | `k8s/auth-deployment.yml`, `k8s/auth-service.yml` (port 80 → 3000) |
 
-- landing and login flow
-- project creation and session restoration
-- IDE-like workspace UI
-- file explorer and terminal panel
-- live preview panel
-- model selection and chat interactions
+**How it works:** Passport runs the Google strategy with `session: false`. On callback the service finds or creates the user, signs a JWT (1 hour expiry), and sets it in an `httpOnly` cookie named `token` (7-day `maxAge`, `secure` and `sameSite: none` in production, optional `COOKIE_DOMAIN`). It then redirects to `FRONTEND_URL` and publishes a login event to RabbitMQ.
 
-The main application logic is in `frontend/src/App.jsx` and its surrounding components/context utilities.
+**Key packages:** `passport`, `passport-google-oauth20`, `jsonwebtoken`, `mongoose`, `amqplib`, `cookie-parser`, `morgan`
 
-### 4.2 Auth Service
-Location: `auth/`
+---
 
-The auth service handles:
+### 4.2 AI Orchestration Service
 
-- Google OAuth strategy setup using Passport
-- JWT generation
-- cookie-based session handling
-- user lookup/creation in MongoDB
-- sending auth notifications through the messaging layer
+| Field | Value |
+|---|---|
+| **Directory** | `ai-orchestration/` |
+| **Responsibility** | Hosts the LangGraph ReAct agent, streams responses via SSE, proxies tool calls to the per-sandbox agent |
+| **Runtime** | Node.js 20 / ES Modules, Express |
+| **Port** | 3000 |
+| **Layout** | `server.js`, `src/app.js`, `src/routes/agent.routes.js`, `src/agents/code.agent.js`, `src/agents/tool.js` |
+| **Dockerfile** | `ai-orchestration/dockerfile` (`node:20-alpine`) |
+| **K8s** | `k8s/ai-deployment.yml`, `k8s/ai-service.yml` |
 
-Key files:
+**Highlights:**
+- `code.agent.js` defines a `MODELS` registry (Groq `gpt-oss-120b`, Mistral Small, Gemini Flash) and builds the agent with `createReactAgent`.
+- `tool.js` implements the three file tools against `http://sandbox-service-<projectId>:3000`.
+- Retry-with-backoff on provider `429` errors resumes from the last `MemorySaver` checkpoint.
 
-- `auth/src/app.js`
-- `auth/src/routes/auth.routes.js`
-- `auth/src/models/user.model.js`
+**Key packages:** `langchain`, `@langchain/langgraph`, provider packages for Groq, Mistral, and Gemini, `axios`, `zod`, `morgan`
 
-### 4.3 AI Orchestration Service
-Location: `ai-orchestration/`
+---
 
-This service coordinates AI requests, project memory, and streaming chat responses. It exposes endpoints for:
+### 4.3 Notification Service
 
-- listing available models
-- invoking the agent
-- retrieving and clearing project history
-- streaming message/tool output back to the client
+| Field | Value |
+|---|---|
+| **Directory** | `notification/` |
+| **Responsibility** | Consumes `auth_notification_queue` and sends login-alert emails via Gmail OAuth2 |
+| **Runtime** | Node.js 20 / ES Modules, Express (thin shell for health endpoints) |
+| **Port** | 4000 |
+| **K8s** | `k8s/notification-deployment.yml`, `k8s/notification-service.yml` (port 80 → 4000) |
 
-Key files:
+This keeps email delivery decoupled from the login flow: a slow or failing mail provider never blocks sign-in.
 
-- `ai-orchestration/src/app.js`
-- `ai-orchestration/src/routes/agent.routes.js`
-- `ai-orchestration/src/agents/`
+**Key packages:** `amqplib`, `nodemailer`, `morgan`
+
+---
 
 ### 4.4 Sandbox Server
-Location: `sandbox/server/`
 
-The sandbox server is the API layer that manages project and sandbox lifecycle operations. It includes:
+| Field | Value |
+|---|---|
+| **Directory** | `sandbox/server/` |
+| **Responsibility** | Creates sandbox pods and services on demand; registers TTL keys in Redis; deletes expired sandboxes |
+| **Runtime** | Node.js 22 / ES Modules, Express |
+| **Port** | 3000 |
+| **K8s** | Runs with `serviceAccountName: resource-manager` |
 
-- `/api/sandbox/health` checks
-- sandbox startup logic for creating a project/workspace
-- project creation and lookup routes
-- integration with Kubernetes resources for pod and service creation
+`POST /api/sandbox/start` creates a Pod (labelled `app=sandbox-instance`) and a matching ClusterIP Service, then returns `{ sandboxId, previewUrl }`.
 
-Key files:
+**Key packages:** `@kubernetes/client-node`, `ioredis`, `uuid`, `express`, `morgan`
 
-- `sandbox/server/src/app.js`
-- `sandbox/server/src/routes/sandbox.routes.js`
+---
 
-### 4.5 Sandbox Agent
-Location: `sandbox/agent/`
+### 4.5 Sandbox Router
 
-This is the runtime environment the browser talks to when it needs terminal or file operations inside the project workspace. It acts as a project execution shell and exposes endpoints such as:
+| Field | Value |
+|---|---|
+| **Directory** | `sandbox/router/` |
+| **Responsibility** | Subdomain-based reverse proxy for previews and agent traffic, including WebSocket upgrades; refreshes the sandbox TTL on each request |
+| **Runtime** | Node.js 20 (alpine) / ES Modules, Express + raw `http.Server` |
+| **Port** | 3000 |
 
-- list files
-- read files
-- create files
-- update files
-- PTY-based terminal input and output
-- Socket.IO terminal streaming
+| Host pattern | Target |
+|---|---|
+| `{sandboxId}.preview.localhost` | `http://sandbox-service-{sandboxId}:80` (Vite on 5173) |
+| `{sandboxId}.agent.localhost` | `http://sandbox-service-{sandboxId}:3000` (agent) |
 
-This agent is the core execution layer for the code-editing workflow.
+The router reads the `Host` header, splits on `.`, and picks the target from the subdomain. WebSocket upgrades (Vite HMR and Socket.IO) are handled on the server's `upgrade` event via `httpxy`.
 
-### 4.6 Sandbox Router
-Location: `sandbox/router/`
+**Key packages:** `http-proxy-middleware`, `httpxy`, `ioredis`, `morgan`
 
-The router service routes traffic based on subdomains and sandbox identifiers. It handles host-based routing to the correct preview URL or agent service for a given sandbox instance.
+---
 
-### 4.7 Notification Service
-Location: `notification/`
+### 4.6 Sandbox Agent (Sidecar)
 
-The notification service consumes queue messages and sends email notifications. It is intentionally decoupled from the auth flow to keep authentication and asynchronous events separate.
+| Field | Value |
+|---|---|
+| **Directory** | `sandbox/agent/` |
+| **Responsibility** | In-pod file API and interactive terminal for `/workspace` |
+| **Runtime** | Node.js 20 on Debian bullseye (needed to build `node-pty`), Express + Socket.IO |
+| **Port** | 3000 |
+
+**REST endpoints:** `GET /list-files`, `GET /read-files?files=a,b`, `PATCH /update-files`, `POST /create-files`, `GET /` (health).
+
+**Socket.IO events:** `terminal-input` (client → server keystrokes) and `terminal-output` (server → client PTY data). A single shared shell serves the sandbox.
+
+**Key packages:** `node-pty`, `socket.io`, `cors`, `express`, `morgan`
+
+---
+
+### 4.7 Sandbox Template
+
+| Field | Value |
+|---|---|
+| **Directory** | `sandbox/template/` |
+| **Responsibility** | Plain React + Vite (JavaScript) starter copied into every new sandbox |
+| **Runtime** | Node.js 20 alpine, serves on `:5173` |
+
+The same image runs as the init container (seeding the shared volume) and as the main container (running the dev server).
+
+---
+
+### 4.8 Frontend
+
+| Field | Value |
+|---|---|
+| **Directory** | `frontend/` |
+| **Stack** | React 19, Vite 8, Tailwind CSS 4, `@xterm/xterm` 6 + addon-fit, `socket.io-client` 4 |
+| **Serving** | Multi-stage Docker build (`node:22-alpine`) served by `nginx:1.27-alpine` with SPA fallback, gzip, immutable caching for `/assets/`, and a `/healthz` probe |
+
+| Component | Description |
+|---|---|
+| `LandingScreen` | Entry point; starts a sandbox |
+| `LoadingScreen` | Shown while the pod boots |
+| `IDELayout` | Overall workspace layout |
+| `FileExplorer` | Tree view of workspace files |
+| `CodeEditor` | Code viewer for the selected file |
+| `PreviewPane` | iframe showing `<id>.preview.localhost` |
+| `TerminalPane` | xterm.js terminal connected to the agent over Socket.IO |
+| `ChatPanel` | AI chat with model dropdown and SSE streaming |
+| `ToolActivityChip` | Shows live file activity from the agent |
+| `RightPanel`, `ResizeDivider` | Resizable side panels (`useResizablePanes` hook) |
+
+**Supporting code:** `SandboxContext`, `services/api.js`, `services/parseSSE.js`, `utils/session.js`, `config.js`.
+
+**App flow:** landing → loading → IDE. The session is saved in `sessionStorage` and restored after a liveness probe of the agent. The chosen model is saved in `localStorage` under `syncspace_model`.
 
 ---
 
 ## 5. Sandbox Lifecycle
 
-A typical sandbox lifecycle looks like this:
+### 5.1 Provisioning Flow
 
-1. The user signs in through the frontend.
-2. The frontend calls the sandbox API to create or resume a session.
-3. The sandbox service creates a Kubernetes pod and service for the user's project.
-4. The router assigns a preview route and agent route for that sandbox.
-5. The frontend connects to the sandbox agent and terminal.
-6. The user edits files or asks the AI to change code.
-7. The AI agent reads files, updates code, and streams output back to the browser.
-8. The preview route reflects the app state in real time.
-9. Idle sandbox resources are cleaned up via Redis TTL and related runtime controls.
+```mermaid
+sequenceDiagram
+    actor User
+    participant FE as Frontend
+    participant ING as Nginx Ingress
+    participant SB as Sandbox Server
+    participant K8S as Kubernetes API
+    participant RD as Redis
 
-This creates a short-lived, isolated project environment where experiments can be created and destroyed without affecting other users.
+    User->>FE: Click "Create Sandbox"
+    FE->>ING: POST /api/sandbox/start
+    ING->>SB: route to sandbox-service
+    SB->>SB: Generate UUID → sandboxId
+    par K8s + Redis
+        SB->>K8S: create Pod (sandbox-pod-{id})
+        SB->>K8S: create Service (sandbox-service-{id})
+        SB->>RD: SET sandbox:{id} EX 120
+    end
+    SB-->>FE: 201 { sandboxId, previewUrl }
+    FE->>FE: Save session, render IDE
+```
+
+### 5.2 Pod Specification
+
+- **Init container:** runs the `template` image and copies `/workspace` into a shared `emptyDir` volume.
+- **`template` container:** runs the Vite dev server on port 5173.
+- **`agent` container:** runs the file API and PTY server on port 3000.
+
+Both main containers mount the same `emptyDir` volume. A file written by the agent is immediately visible to Vite's watcher, which triggers HMR.
+
+### 5.3 Per-Sandbox Service
+
+```yaml
+ports:
+  - name: http        # port 80  -> targetPort 5173  (Vite preview)
+  - name: agent-http  # port 3000 -> targetPort 3000 (agent API)
+selector:
+  sandboxId: <id>     # unique per pod, prevents cross-sandbox routing
+type: ClusterIP
+```
+
+### 5.4 TTL & Cleanup
+
+1. On creation, `sandbox:{id}` is stored in Redis with a 120-second TTL.
+2. Every request through the router refreshes the TTL, so active sessions stay alive.
+3. The sandbox server subscribes to `__keyevent@0__:expired`. When a key expires, it deletes the pod and service.
+4. Storage is an `emptyDir`, so all workspace data is destroyed with the pod.
 
 ---
 
-## 6. Developer Setup & Local Development
+## 6. AI Code Editing Layer
 
-### Prerequisites
+### 6.1 Agent Architecture
 
-- Node.js 20+
-- npm
-- Docker
-- Kubernetes tooling for local cluster/dev flows
-- Skaffold
+A LangGraph ReAct agent acts as a senior frontend engineer. It receives a user message, decides which tools to call, executes them, reads the results, and repeats until it can give a final answer.
 
-### Install Dependencies
+| Tool | HTTP call | Purpose |
+|---|---|---|
+| `list_files` | `GET http://sandbox-service-{id}:3000/list-files` | Returns all workspace file paths |
+| `read_files` | `GET http://sandbox-service-{id}:3000/read-files?files=...` | Returns contents of requested files |
+| `update_files` | `PATCH http://sandbox-service-{id}:3000/update-files` | Writes full file contents, creating directories as needed |
 
-From the repository root, install dependencies for each service:
+The agent talks to the sandbox over Kubernetes internal DNS (`sandbox-service-{sandboxId}`).
 
-```bash
-cd auth && npm install
-cd ../ai-orchestration && npm install
-cd ../notification && npm install
-cd ../frontend && npm install
-cd ../sandbox/server && npm install
-cd ../sandbox/agent && npm install
-cd ../sandbox/router && npm install
+### 6.2 Request & Streaming
+
+```
+POST /api/ai/invoke
+Body: { message: string, projectId: string, model?: string }
 ```
 
-### Run the Frontend
+`projectId` is the `sandboxId`. The response is `text/event-stream`: tool-activity lines first (listing, reading, updating files), then the final answer. The frontend's `parseSSE.js` classifies each chunk, and `ChatPanel` renders activity chips under the user's message in real time. The chat input becomes ready again once the agent finishes.
 
-```bash
-cd frontend
-npm run dev
+### 6.3 Multi-Model Support
+
+`GET /api/ai/models` returns the model registry:
+
+| Provider | Model |
+|---|---|
+| Groq | `gpt-oss-120b` |
+| Mistral | Mistral Small |
+| Google | Gemini Flash |
+
+The user picks a model in the chat panel; its id is sent as `model` in the invoke request.
+
+### 6.4 Rate-Limit Resilience
+
+The agent uses a `MemorySaver` checkpointer. If a provider returns `429`, the service retries with backoff and resumes from the last checkpoint rather than starting over.
+
+### 6.5 Hot Reload
+
+Writes land on the shared volume. Vite's watcher detects the change and pushes an HMR update over `ws://{id}.preview.localhost`, so the preview iframe updates without a full reload.
+
+### 6.6 Error Handling
+
+- If streaming has already started, errors end the stream gracefully; otherwise the API returns `500`.
+- Tool errors (for example, file not found) are returned as strings so the agent can reason about them and recover.
+- Writes use recursive directory creation, so new files in new folders need no separate step.
+
+---
+
+## 7. Data Models & Schemas
+
+### 7.1 User (MongoDB, `auth` database)
+
+| Field | Type | Constraints |
+|---|---|---|
+| `_id` | `ObjectId` | PK |
+| `googleId` | `String` | required, unique |
+| `email` | `String` | required, unique |
+| `name` | `String` | required |
+| `avatar` | `String` | optional |
+| `createdAt` / `updatedAt` | `Date` | automatic timestamps |
+
+```javascript
+const userSchema = new mongoose.Schema({
+  googleId: { type: String, required: true, unique: true },
+  email:    { type: String, required: true, unique: true },
+  name:     { type: String, required: true },
+  avatar:   { type: String }
+}, { timestamps: true });
 ```
 
-### Run Backend Services Individually
+### 7.2 Sandbox State (Redis)
 
-Auth:
+- **Key:** `sandbox:{sandboxId}`
+- **Value:** `{ "status": "active" }`
+- **TTL:** 120 seconds, refreshed by the router
+- There is currently no persistent sandbox record in MongoDB.
+
+### 7.3 Queue Payload
+
+**Queue:** `auth_notification_queue` (durable)
+
+| Field | Type | Description |
+|---|---|---|
+| `userId` | `String` | User `_id` |
+| `action` | `String` | Currently `"google_login"` |
+| `timestamp` | `Date` | Event time |
+| `email` | `String` | User email |
+
+---
+
+## 8. Kubernetes Cluster Design
+
+### 8.1 Workloads
+
+| Deployment | Image | Notes |
+|---|---|---|
+| `auth-deployment` | `auth` | Google OAuth + JWT |
+| `ai-deployment` | `ai-orchestration` | LangGraph agent |
+| `sandbox-deployment` | `sandbox` | Uses `resource-manager` service account |
+| `router-deployment` | `router` | Host-based proxy |
+| `notification-deployment` | `notification` | RabbitMQ consumer |
+| `frontend-deployment` | `syncspace-frontend` | nginx serving the React build; Ingress catch-all |
+
+Dynamic pods (one per sandbox) run the `template` and `agent` images.
+
+### 8.2 Services
+
+| Service | Type | Port |
+|---|---|---|
+| `auth-service` | ClusterIP | 80 → 3000 |
+| `ai-service` | ClusterIP | 80 → 3000 |
+| `sandbox-service` | ClusterIP | 80 → 3000 |
+| `router-service` | ClusterIP | 80 → 3000 |
+| `notification-service` | ClusterIP | 80 → 4000 |
+| `frontend-service` | ClusterIP | 80 |
+| `sandbox-service-{id}` | ClusterIP | 80 → 5173, 3000 → 3000 |
+
+### 8.3 Ingress
+
+An nginx Ingress routes `/api/auth`, `/api/sandbox`, and `/api/ai` to their services, `*.preview.localhost` and `*.agent.localhost` to the router, and everything else to the frontend. It is tuned for streaming: response buffering off, cookie-based session affinity, and long proxy timeouts for SSE and WebSockets.
+
+### 8.4 RBAC
+
+A `resource-manager` ServiceAccount, Role, and RoleBinding allow the sandbox server to `get`, `list`, `watch`, `create`, and `delete` **pods** and **services** in the `default` namespace, and nothing else.
+
+### 8.5 Secrets
+
+Sensitive values (database URLs, JWT secret, Google credentials, model API keys) are stored in Kubernetes `Opaque` Secrets and injected through `secretKeyRef`. Never commit real values; see [Security Considerations](#13-security-considerations).
+
+### 8.6 Storage
+
+There are no PersistentVolumeClaims. Sandboxes use `emptyDir` volumes, which are ephemeral by design.
+
+---
+
+## 9. Developer Setup & Local Development
+
+### 9.1 Prerequisites
+
+| Tool | Minimum version |
+|---|---|
+| Node.js | 20.x (22.x for the frontend build and sandbox server images) |
+| npm | 10.x |
+| Docker | 24.x |
+| kubectl | 1.28+ |
+| minikube or kind | recent |
+| Skaffold | v2.x |
+| nginx Ingress Controller | latest |
+
+### 9.2 Run the Full Stack
 
 ```bash
-cd auth
-npm run dev
-```
+# 1. Clone
+git clone <repo-url>
+cd SyncSpace
 
-AI orchestration:
+# 2. Start a local cluster
+minikube start --driver=docker --cpus=4 --memory=8g
+minikube addons enable ingress
 
-```bash
-cd ai-orchestration
-npm run dev
-```
+# 3. Build images inside the cluster's Docker daemon
+eval $(minikube docker-env)
 
-Notification:
+# 4. Create secrets from a local, git-ignored file
+cp k8s/secrets.example.yml k8s/secrets.local.yml   # fill in your own values
+kubectl apply -f k8s/secrets.local.yml
 
-```bash
-cd notification
-npm run dev
-```
+# 5. Apply RBAC
+kubectl apply -f k8s/rbac.yml
 
-Sandbox server:
-
-```bash
-cd sandbox/server
-npm run dev
-```
-
-Sandbox agent:
-
-```bash
-cd sandbox/agent
-npm run dev
-```
-
-Router:
-
-```bash
-cd sandbox/router
-npm run dev
-```
-
-### Run the Full Stack with Skaffold
-
-```bash
+# 6. Build and deploy with live reload
 skaffold dev
 ```
 
-This is the recommended workflow when you want the full service graph, Kubernetes-based networking, and sandbox routing behavior to match the intended deployment design.
+Skaffold builds the service images (`ai-orchestration`, `agent`, `router`, `sandbox`, `template`, plus the others defined in `skaffold.yml`) and applies the manifests in `k8s/`.
+
+### 9.3 Frontend Dev Server
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173
+```
+
+In development, Vite proxies `/api`, `/agent-proxy/<id>`, and `/preview-proxy/<id>` to the cluster ingress on `localhost:8080`, rewriting the `Host` header to `<id>.agent.localhost` or `<id>.preview.localhost`. The terminal connects straight to `http://<id>.agent.localhost` through `getAgentSocketUrl`.
+
+### 9.4 Wildcard DNS
+
+Sandbox previews need `*.localhost` subdomains to resolve to your cluster entry point. Most browsers resolve `*.localhost` to loopback automatically. If yours does not, use `dnsmasq` or add entries to `/etc/hosts`.
+
+### 9.5 Running a Single Service
+
+```bash
+cd auth && npm install && npm run dev            # port 3000
+cd ai-orchestration && npm install && npm run dev # port 3000
+cd notification && npm install && npm run dev     # port 4000
+cd sandbox/server && npm install && npm run dev   # needs a valid kubeconfig
+cd sandbox/router && npm install && npm run dev
+cd sandbox/agent && npm install && npm run dev    # needs node-pty build tools
+```
+
+### 9.6 Try a Sandbox from the Command Line
+
+```bash
+curl -X POST http://localhost:8080/api/sandbox/start
+# { "sandboxId": "...", "previewUrl": "http://<id>.preview.localhost" }
+
+curl "http://<id>.agent.localhost/list-files"
+
+curl -X PATCH http://<id>.agent.localhost/update-files \
+  -H "Content-Type: application/json" \
+  -d '{"updates":[{"file":"src/App.jsx","content":"export default () => <h1>Hello</h1>"}]}'
+```
 
 ---
 
-## 7. Environment Variables Reference
+## 10. Environment Variables Reference
 
-Several services depend on environment variables to function properly. Common examples include:
+### Auth Service
 
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_CALLBACK_URL`
-- `FRONTEND_URL`
-- `JWT_SECRET`
-- MongoDB connection values
-- Redis connection and TTL values
-- RabbitMQ connection values
-- Kubernetes-related runtime configuration
-- model/provider configuration for AI services
+| Variable | Description | Required |
+|---|---|---|
+| `AUTH_MONGO_URI` | MongoDB connection string | Yes |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | Yes |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Yes |
+| `GOOGLE_CALLBACK_URL` | OAuth callback URL | Yes |
+| `JWT_SECRET` | Secret for signing JWTs (use a long random value) | Yes |
+| `FRONTEND_URL` | Where to redirect after login | Yes |
+| `COOKIE_DOMAIN` | Optional cookie domain | No |
+| `RABBITMQ_URL` | AMQP connection URL | Yes |
 
-It is recommended to use `.env` files or a secret manager in local development and production deployments.
+### AI Orchestration Service
 
----
+| Variable | Description | Required |
+|---|---|---|
+| `GROQ_API_KEY` | Groq API key | For Groq models |
+| `MISTRAL_API_KEY` | Mistral API key | For Mistral models |
+| `GEMINI_API_KEY` | Gemini API key | For Gemini models |
 
-## 8. API Overview
+### Notification Service
 
-### Frontend to Auth
-- Google sign-in routes under `/api/auth`
-- JWT-based auth flow with cookies
+| Variable | Description | Required |
+|---|---|---|
+| `RABBITMQ_URL` | AMQP connection URL | Yes |
+| `EMAIL_USER` | Gmail address used to send | Yes |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth credentials for Gmail | Yes |
+| `GOOGLE_REFRESH_TOKEN` | Gmail OAuth2 refresh token | Yes |
 
-### Frontend to Sandbox
-- sandbox lifecycle and project endpoints under `/api/sandbox`
-- health checks and service startup logic
+### Sandbox Server and Router
 
-### Frontend to AI
-- model registry endpoint under `/api/ai/models`
-- streaming invocation endpoint under `/api/ai/invoke`
-- history fetch and clear endpoints under `/api/ai/history/:projectId`
+| Variable | Description | Required |
+|---|---|---|
+| `REDIS_URL` | Redis URL (`redis://` or `rediss://`) | Yes |
 
-### Sandbox Agent Endpoints
-The agent service exposes file and terminal operations, including:
+### Sandbox Agent
 
-- `GET /` for health info
-- `GET /list-files`
-- `GET /read-files`
-- `PATCH /update-files`
-- `POST /create-files`
-- Socket.IO terminal events like `terminal-input` and `terminal-output`
-
----
-
-## 9. Deployment
-
-The repository is set up for containerized and Kubernetes-based deployment using:
-
-- Dockerfiles in individual service folders
-- Kubernetes YAML manifests in `k8s/`
-- Skaffold configuration in `skaffold.yml`
-- ingress and service definitions for app routing
-- secret manifests for environment configuration
-
-This gives the project a clear path to run in a dev cluster, staging environment, or production-like Kubernetes environment.
+| Variable | Description | Required |
+|---|---|---|
+| `SHELL` | Shell for the PTY (defaults to `bash`) | No |
 
 ---
 
-## 10. Security Considerations
+## 11. API Reference
 
-This project includes important security patterns, but production adoption should include additional hardening.
+### 11.1 Auth (`/api/auth`)
 
-Recommended steps:
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/auth/google` | Starts Google OAuth |
+| `GET` | `/api/auth/google/callback` | Upserts user, sets JWT cookie, redirects to the frontend |
+| `GET` | `/_status/healthz` | Liveness probe |
+| `GET` | `/_status/readyz` | Readiness probe |
 
-- use a secrets manager for credentials and tokens
-- enforce strict CORS policies by environment
-- validate request payloads before AI invocation and sandbox actions
-- use RBAC and namespace isolation in Kubernetes
-- store persistent secrets outside Git
-- enable TLS through ingress or a dedicated gateway
-- ensure sandbox isolation is enforced and resource usage is limited
+### 11.2 Sandbox Server (`/api/sandbox`)
 
-The code already includes cookie-based auth and JWT generation patterns, but production deployment still requires careful operational hardening.
+| Method | Endpoint | Response | Description |
+|---|---|---|---|
+| `POST` | `/api/sandbox/start` | `201 { message, sandboxId, previewUrl }` | Creates pod, service, and TTL key |
+| `GET` | `/api/sandbox/health` | `200` | Health check |
 
----
+### 11.3 AI Orchestration (`/api/ai`)
 
-## 11. Roadmap & Known Limitations
+| Method | Endpoint | Body | Response |
+|---|---|---|---|
+| `GET` | `/api/ai/models` | none | List of available models |
+| `POST` | `/api/ai/invoke` | `{ message, projectId, model }` | `text/event-stream` |
 
-### Current Strengths
-- working multi-service project structure
-- secure Google login flow
-- AI orchestration and streaming chat pattern
-- file and terminal access inside a sandbox
-- live preview and dynamic sandbox routing
-- Kubernetes deployment pipeline foundation
+### 11.4 Sandbox Agent (`{id}.agent.localhost`)
 
-### Potential Enhancements
-- stronger resource cleanup and lifecycle management
-- project persistence and backup strategy
-- richer multi-user collaboration model
-- improved observability and monitoring
-- more complete deployment automation and environment scaffolding
-- user permissions and RBAC for project-level access
-- additional auth providers and account linking
+| Method | Endpoint | Request | Description |
+|---|---|---|---|
+| `GET` | `/list-files` | none | Lists workspace files (excludes `node_modules`, `.git`, `dist`) |
+| `GET` | `/read-files` | `?files=a,b` | Reads file contents |
+| `PATCH` | `/update-files` | `{ updates: [{ file, content }] }` | Writes or overwrites files |
+| `POST` | `/create-files` | `{ files: [{ file, content }] }` | Creates new files |
+| `GET` | `/` | none | Health check |
 
-### Known Notes
-This repository appears to be an active development platform rather than a polished production SaaS product. Some features are intentionally modular and task-oriented, and some environment configuration details must be filled in for full local or cloud deployment.
+**Socket.IO:** `terminal-input` (client → server) and `terminal-output` (server → client).
 
 ---
 
-## 12. Contributing
+## 12. CI/CD Pipeline
 
-Contributions are welcome. If you want to improve the project, please:
+### 12.1 Current Setup
 
-1. fork the repository
-2. create a feature branch
-3. make focused changes with clear scope
-4. validate the affected services locally
-5. open a pull request with a concise summary of the change
+**Skaffold** is the build and deploy orchestrator for development. It builds the Docker images, syncs `src/**` for fast iteration on supported services, and applies the manifests in `k8s/`.
 
-Before submitting a large change, it is recommended to review the service boundaries and deployment setup, since the repo is structured as multiple cooperating services.
+### 12.2 Recommended GitHub Actions Pipeline
+
+```mermaid
+flowchart LR
+    PR[Pull Request] --> Lint[Lint]
+    Lint --> Test[Tests]
+    Test --> Build[Docker Build]
+    Build --> Push[Push to Registry]
+    Push --> Deploy[Deploy to cluster]
+    Deploy --> Smoke[Smoke Tests]
+```
+
+| Stage | Tool |
+|---|---|
+| Lint | ESLint (`npm run lint`) |
+| Test | Vitest / Jest (to be added) |
+| Build | Docker Buildx, tagged with git SHA |
+| Push | GHCR or Docker Hub |
+| Deploy | `kubectl apply` or ArgoCD |
 
 ---
 
-## 13. License
+## 13. Security Considerations
 
-There is no explicit license file in the repository root at the time of writing. If this project is intended for public reuse or commercial distribution, a license should be added before publishing or distributing the code.
+### 13.1 Sandbox Isolation
+
+- Each sandbox runs in its own pod with CPU and memory limits.
+- Each per-sandbox Service selects on a unique `sandboxId`, so traffic cannot cross sandboxes.
+- Workspace storage is an `emptyDir` with no host mount.
+- File paths in the agent API are joined under `/workspace` to block traversal.
+
+### 13.2 Authentication
+
+- Google OAuth 2.0 with a short-lived JWT in an `httpOnly` cookie.
+- The sandbox server needs only pod and service permissions, following least privilege.
+
+### 13.3 Secrets
+
+Keep real credentials out of git. If any secret has ever been committed, rotate it and remove it from history, then move to Sealed Secrets, External Secrets Operator, or SOPS.
+
+### 13.4 Hardening Checklist
+
+- Enforce JWT verification on `/api/sandbox/start` and `/api/ai/invoke`.
+- Add a shared-secret check on the sandbox agent API.
+- Add `securityContext` to sandbox containers (`runAsNonRoot`, `allowPrivilegeEscalation: false`).
+- Add NetworkPolicies so sandbox pods only accept traffic from the router and AI service.
+- Add rate limiting on AI and sandbox-creation endpoints.
+- Use TLS at the Ingress and strict CORS.
 
 ---
 
-## Summary
+## 14. Observability
 
-SyncSpace is a cloud-native AI coding platform that combines Google authentication, project lifecycle management, browser-based sandbox execution, and AI-driven code editing to create a modern developer workspace. It is built as a multi-service Node.js system with a React frontend, dynamic Kubernetes sandboxing, file/terminal APIs, and a streaming AI orchestration layer.
+- **Logging:** `morgan` request logs on every service, written to stdout for the cluster log driver.
+- **Health probes:** each service exposes liveness and readiness endpoints (`/_status/healthz`, `/api/status/healthz`, `/api/sandbox/health`); the frontend nginx exposes `/healthz`.
+- **Planned:** structured JSON logs, Prometheus metrics (`prom-client`), OpenTelemetry tracing, and alerting on pod restarts and AI error rates.
 
-It is a strong foundation for AI-assisted coding workflows and browser-based development environments, and it is well positioned for further extension into collaboration, persistence, and production-grade observability.
+---
+
+## 15. Roadmap & Known Limitations
+
+### 15.1 Known Limitations
+
+| Limitation | Impact |
+|---|---|
+| No authentication enforced on sandbox and AI endpoints | Unauthenticated clients could create sandboxes or call the AI |
+| Sandbox pods have no `securityContext` | Containers run as root |
+| No rate limiting | Possible resource exhaustion |
+| Services run `nodemon` in their container `CMD` | Dev tooling in images; use `node server.js` for production |
+| No automated tests | Regressions are caught manually |
+| No persistent sandbox storage | A session cannot be resumed after the TTL expires |
+| No cross-session AI memory | Each invoke starts a fresh agent run |
+| Single shared shell per sandbox | Multiple terminal clients share one session |
+
+### 15.2 Planned Features
+
+| Feature | Priority |
+|---|---|
+| JWT enforcement on sandbox and AI endpoints | High |
+| Persistent project storage (PVC or object storage) | High |
+| Project management (create, list, reopen projects) | High |
+| Role-based access control | Medium |
+| Multi-turn AI conversation history | Medium |
+| AI edit history and undo | Medium |
+| Real-time multi-user collaboration | Medium |
+| Multi-language sandbox templates (Node, Python, Next.js) | Medium |
+| Observability stack (metrics, tracing, alerts) | Medium |
+| Stronger resource isolation for sandboxes | Low |
+
+---
+
+## 16. Contributing Guide
+
+### 16.1 Branch Naming
+
+| Pattern | Use |
+|---|---|
+| `feat/<description>` | New features |
+| `fix/<description>` | Bug fixes |
+| `chore/<description>` | Tooling and config |
+| `docs/<description>` | Documentation |
+| `refactor/<description>` | Restructuring without behavior change |
+
+### 16.2 Pull Requests
+
+1. Branch from `main` and rebase before opening a PR.
+2. Title format: `<type>(<scope>): <subject>`, for example `fix(ai): handle 429 retry on resume`.
+3. Describe what changed, why, and how to test it.
+4. Make sure lint and build pass.
+
+**Review checklist:**
+
+- [ ] No secrets or credentials in code or manifests
+- [ ] New endpoints have at least a basic test
+- [ ] K8s manifests include resource requests and limits
+- [ ] Health probes updated when adding a service or port
+- [ ] README updated if the architecture changes
+
+### 16.3 Code Style
+
+- All Node.js services use ES Modules (`"type": "module"`).
+- ESLint is configured per service; run `npm run lint` before committing.
+- Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`.
+
+---
+
+## 17. License
+
+No license has been declared yet. Add a `LICENSE` file (for example MIT or ISC) before publishing or distributing the code.
+
+```
+Copyright (c) 2026 <your name>
+```
