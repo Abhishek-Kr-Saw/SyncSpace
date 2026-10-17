@@ -96,53 +96,86 @@ This monorepo combines:
 
 ## 3. High-Level Architecture
 
-```mermaid
-flowchart TB
-    subgraph Browser[Browser / Frontend]
-        UI[React App\nLanding / IDE / Preview / Terminal / Chat]
-    end
+```text
++---------------------------+
+| Browser / Frontend        |
+| React App                 |
+| Landing / IDE / Preview    |
+| Terminal / Chat            |
++-------------+-------------+
+              |
+              v
++-------------+-------------+
+| Frontend Service          |
+| React + Vite              |
++-------------+-------------+
+              |
+       +------v------+
+       | Auth Service |
+       | Express +    |
+       | Passport +   |
+       | JWT          |
+       +------+-------+
+              |
+         +----v----+
+         | MongoDB |
+         +---------+
 
-    subgraph Services[SyncSpace Services]
-        FE[frontend\nReact + Vite]
-        AUTH[auth\nExpress + Passport + JWT]
-        AI[ai-orchestration\nAI API + project history]
-        SB[sandbox/server\nproject + sandbox APIs]
-        ROUTER[sandbox/router\nhost-based proxy]
-        NOTIFY[notification\nconsumer for auth events]
-    end
+       +------v------+
+       | AI Service  |
+       | Orchestration|
+       | + project   |
+       | history     |
+       +------+------+
+              |
+             +v+
+             | LLM |
+             +---+
 
-    subgraph Runtime[Kubernetes + Sandbox Runtime]
-        POD[sandbox pod\nworkspace + preview app + agent]
-        SVC[service\npreview + agent endpoints]
-    end
+       +------v------+
+       | Sandbox API |
+       | project +   |
+       | sandbox ops |
+       +------+------+
+              |
+              v
+       +------v------+
+       | Redis       |
+       | TTL / state |
+       +-------------+
 
-    subgraph External[External Services]
-        MONGO[(MongoDB)]
-        REDIS[(Redis)]
-        MQ[(RabbitMQ / queue)]
-        LLM[LLM provider(s)]
-    end
+       +------v------+
+       | Router      |
+       | Host-based  |
+       | proxy       |
+       +------+------+ 
+              |
+              v
++-------------+-------------+
+| Kubernetes Sandbox Runtime |
+| Sandbox Pod / Preview App |
+| Agent + Terminal API      |
++-------------+-------------+
+              |
+              v
+        +-----v-----+
+        | Live App  |
+        | Preview   |
+        +-----------+
 
-    UI --> FE
-    FE --> AUTH
-    FE --> AI
-    FE --> SB
-    FE --> ROUTER
-
-    AUTH --> MONGO
-    AUTH --> MQ
-    AI --> LLM
-    SB --> REDIS
-    SB --> K8S[Kubernetes API]
-    ROUTER --> POD
-    NOTIFY --> MQ
-    K8S --> POD
-    POD --> SVC
-    SVC --> APP[Live app preview]
-    SVC --> AGENT[Sandbox agent / terminal API]
+              |
+       +------v------+
+       | Notification |
+       | Service     |
+       +------+------+
+              |
+              v
+          +---v---+
+          | RabbitMQ |
+          +---------+
 ```
 
-At a high level, the frontend communicates with the auth, sandbox, and AI services. Those services connect to infrastructure services such as MongoDB, Redis, RabbitMQ, and the Kubernetes API for sandbox provisioning. The router service directs requests based on the incoming host and sandbox ID, so each project instance gets a consistent preview or agent endpoint.
+At a high level, the frontend communicates with the auth, sandbox, and AI services. These services connect to MongoDB, Redis, RabbitMQ, and the Kubernetes API for sandbox provisioning, while the router service directs traffic based on the incoming host and sandbox ID so each project instance gets a consistent preview or agent endpoint.
 
 ---
 
