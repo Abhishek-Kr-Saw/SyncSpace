@@ -219,11 +219,11 @@ app.get('/read-files', async (req, res) => {
  */
 app.patch('/update-files', async (req, res) => {
 
-    const updates = req.body.files;
+    const updates = req.body.files || req.body.updates;
 
     if (!updates || !Array.isArray(updates)) {
         return res.status(400).json({
-            message: 'Invalid request body. Expected a JSON object with an "updates" property containing an array of file updates.',
+            message: 'Invalid request body. Expected a JSON object with a "files" or "updates" property containing an array of file updates.',
             status: 'error',
         });
     }

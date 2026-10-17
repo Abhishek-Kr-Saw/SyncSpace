@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import { ChatGroq } from "@langchain/groq";
 import { ChatGoogle } from "@langchain/google/node";
+import { ChatMistralAI } from "@langchain/mistralai";
 import { MemorySaver } from "@langchain/langgraph";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage, ToolMessage } from "@langchain/core/messages";
@@ -25,6 +26,12 @@ const MODELS = {
         provider: "google",
         envKey: "GEMINI_API_KEY",
         create: () => new ChatGoogle({ model: "gemini-3.7-flash", apiKey: process.env.GEMINI_API_KEY, maxRetries: 0 }),
+    },
+    "mistral/mistral-small": {
+        label: "Mistral Small (Mistral)",
+        provider: "mistral",
+        envKey: "MISTRAL_API_KEY",
+        create: () => new ChatMistralAI({ model: "mistral-small-latest", apiKey: process.env.MISTRAL_API_KEY, maxRetries: 0 }),
     },
 };
 

@@ -3,4 +3,8 @@ k8s/database-secrets.yml
 k8s/google-secrets.yml
 k8s/jwt-secrets.yml
 k8s/aws-secrets.yml
+k8s/secrets.local.yml
+*.local.yml
+.env
+*.env
 node_modules

@@ -44,6 +44,15 @@ export default function LandingScreen({ onStartLoading, onSandboxReady }) {
     }
   }
 
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (title.trim()) {
+        handleNewProject();
+      }
+    }
+  }
+
   async function handleOpenProject(project) {
     setError(null);
     onStartLoading();
@@ -82,6 +91,7 @@ export default function LandingScreen({ onStartLoading, onSandboxReady }) {
             placeholder="Enter project title" 
             value={title} 
             onChange={(e) => setTitle(e.target.value)} 
+            onKeyDown={handleKeyDown}
             className="flex-1 px-4 py-3 rounded-lg border outline-none transition-colors"
             style={{ 
               backgroundColor: 'var(--bg-secondary)', 

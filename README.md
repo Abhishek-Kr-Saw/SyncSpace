@@ -54,19 +54,22 @@ The AI agent is built with **LangChain + LangGraph** and can be backed by **Groq
 | Area | Feature |
 |---|---|
 | **Authentication** | Google OAuth 2.0 sign-in (Passport), JWT issued as an `httpOnly` cookie, user records persisted in MongoDB |
-| **Sandboxes** | One-click, per-user, ephemeral pods created on demand through the Kubernetes API |
-| **Live preview** | Sandbox app served on its own subdomain (`<id>.preview.localhost`) with working HMR over WebSockets |
+| **Sandboxes** | One-click, per-user, ephemeral pods created on demand through the Kubernetes API with automatic resource bounds |
+| **Project Management** | Project dashboard in UI to create, list, and resume persistent user projects saved in MongoDB |
+| **Persistent Storage** | Bidirectional file synchronization between sandbox workspace and AWS S3 via dedicated in-pod `sync-agent` |
+| **Live preview** | Sandbox app served on its own subdomain (`<id>.preview.localtest.me`) with working HMR over WebSockets |
 | **AI agent** | LangGraph ReAct agent with `list_files`, `read_files`, and `update_files` tools that edit the real workspace |
-| **Multi-model** | Model registry (Groq gpt-oss-120b, Mistral Small, Gemini Flash) exposed through `GET /api/ai/models`; the chosen model is remembered in the browser |
-| **Streaming chat** | Server-Sent Events stream agent responses; tool activity (listing, reading, updating files) appears under the user's message as it happens |
-| **Resilience** | Retry with backoff using a `MemorySaver` checkpointer, so a Groq `429` rate-limit resumes from the last checkpoint instead of restarting |
+| **Multi-model** | Model registry (Groq gpt-oss-120b, Mistral Small, Gemini Flash) exposed through `GET /api/ai/models`; chosen model remembered in browser |
+| **Streaming chat** | Server-Sent Events stream agent responses; tool activity (listing, reading, updating files) appears in real time |
+| **Chat History** | Multi-turn conversation and tool execution history persisted in MongoDB (`HistoryEvent`) across sessions |
+| **Resilience** | Retry with backoff using a `MongoDBSaver` / `MemorySaver` checkpointer, resuming from checkpoint on 429 rate limits |
 | **Terminal** | Real PTY shell inside the sandbox (`node-pty`) rendered with xterm.js over Socket.IO |
-| **File tools** | List, read, create, and update files in the workspace over a REST API |
-| **IDE UI** | Resizable panes, file explorer, code viewer, preview iframe, tool-activity chips, loading and landing screens |
-| **Session restore** | The active sandbox is stored in `sessionStorage` and restored after a liveness probe of the agent |
-| **Auto cleanup** | Redis TTL keys expire idle sandboxes; the sandbox server then deletes the pod and service |
+| **File tools** | List, read, create, and update files in the workspace over a REST API (accepting `files` or `updates` payload) |
+| **IDE UI** | Resizable panes, file explorer, code viewer, preview iframe, tool-activity chips, loading and project dashboard |
+| **Session restore** | Active sandbox restored from `sessionStorage` after a liveness probe of the agent |
+| **Auto cleanup** | 20-minute Redis TTL keys expire idle sandboxes; sandbox server deletes pod and service via keyspace notification |
 | **Notifications** | Login events published to RabbitMQ and sent as emails by a separate notification service |
-| **Deployment** | Dockerized services, Kubernetes manifests, nginx Ingress, RBAC, and Skaffold for dev |
+| **Deployment** | Dockerized services, Kubernetes manifests, nginx Ingress, RBAC, and Skaffold for live-reload dev |
 
 ---
 
@@ -109,6 +112,7 @@ flowchart TB
             direction LR
             AGENT["<b>Agent Container</b><br/>File API · PTY terminal<br/>Socket.IO"]
             VITE["<b>Template Container</b><br/>Vite dev server · HMR"]
+            SYNC["<b>Sync Agent Container</b><br/>Bidirectional S3 sync"]
             VOL[("Shared workspace<br/>emptyDir")]
         end
         PREVIEW["<b>Live App Preview</b>"]
@@ -118,6 +122,7 @@ flowchart TB
         direction LR
         LLM["<b>LLM Providers</b><br/>Groq · Mistral · Gemini"]
         MAIL["<b>Gmail SMTP</b><br/>OAuth2"]
+        S3["<b>AWS S3</b><br/>Persistent project backup"]
         K8S["<b>Kubernetes API</b>"]
     end
 
@@ -143,8 +148,10 @@ flowchart TB
     K8S -.->|"provisions"| POD
     ROUTER -->|"preview traffic"| VITE
     ROUTER -->|"agent traffic"| AGENT
+    SYNC -->|"download on boot / upload changes"| S3
     AGENT --- VOL
     VITE --- VOL
+    SYNC --- VOL
     VITE --> PREVIEW
 
     classDef client fill:#E8F1FF,stroke:#2F6FED,color:#0B2A5B
@@ -263,16 +270,16 @@ This keeps email delivery decoupled from the login flow: a slow or failing mail 
 | Field | Value |
 |---|---|
 | **Directory** | `sandbox/router/` |
-| **Responsibility** | Subdomain-based reverse proxy for previews and agent traffic, including WebSocket upgrades; refreshes the sandbox TTL on each request |
+| **Responsibility** | Subdomain-based reverse proxy with CORS support for previews and agent traffic, including WebSocket upgrades; refreshes the sandbox TTL on each request |
 | **Runtime** | Node.js 20 (alpine) / ES Modules, Express + raw `http.Server` |
 | **Port** | 3000 |
 
 | Host pattern | Target |
 |---|---|
-| `{sandboxId}.preview.localhost` | `http://sandbox-service-{sandboxId}:80` (Vite on 5173) |
-| `{sandboxId}.agent.localhost` | `http://sandbox-service-{sandboxId}:3000` (agent) |
+| `{sandboxId}.preview.localtest.me` | `http://sandbox-service-{sandboxId}:80` (Vite on 5173) |
+| `{sandboxId}.agent.localtest.me` | `http://sandbox-service-{sandboxId}:3000` (agent) |
 
-The router reads the `Host` header, splits on `.`, and picks the target from the subdomain. WebSocket upgrades (Vite HMR and Socket.IO) are handled on the server's `upgrade` event via `httpxy`.
+The router reads the `Host` header, splits on `.`, and picks the target from the subdomain (`localtest.me` resolves wildcards to `127.0.0.1` locally). WebSocket upgrades (Vite HMR and Socket.IO) are handled on the server's `upgrade` event via `httpxy`. If a sandbox is booting or unreachable, the router returns a clean `503 Service Unavailable` with CORS headers (`Access-Control-Allow-Origin: *`) to prevent browser CORS errors during polling.
 
 **Key packages:** `http-proxy-middleware`, `httpxy`, `ioredis`, `morgan`
 
@@ -287,7 +294,7 @@ The router reads the `Host` header, splits on `.`, and picks the target from the
 | **Runtime** | Node.js 20 on Debian bullseye (needed to build `node-pty`), Express + Socket.IO |
 | **Port** | 3000 |
 
-**REST endpoints:** `GET /list-files`, `GET /read-files?files=a,b`, `PATCH /update-files`, `POST /create-files`, `GET /` (health).
+**REST endpoints:** `GET /list-files`, `GET /read-files?files=a,b`, `PATCH /update-files` (accepts `{ files: [...] }` or `{ updates: [...] }`), `POST /create-files`, `GET /` (health).
 
 **Socket.IO events:** `terminal-input` (client → server keystrokes) and `terminal-output` (server → client PTY data). A single shared shell serves the sandbox.
 
@@ -307,22 +314,37 @@ The same image runs as the init container (seeding the shared volume) and as the
 
 ---
 
-### 4.8 Frontend
+### 4.8 Sync Agent (Sidecar)
+
+| Field | Value |
+|---|---|
+| **Directory** | `sandbox/sync-agent/` |
+| **Responsibility** | Persistent cloud storage via bidirectional AWS S3 sync |
+| **Runtime** | Node.js 20 alpine, AWS SDK v3, Chokidar |
+| **Port** | 4000 |
+
+On sandbox initialization, `sync-agent` checks the S3 bucket (`syncspace-bucket`) under `${projectId}/`. If existing project files exist, it downloads them into `/workspace`. A persistent `chokidar` file watcher then streams any file additions or modifications directly to S3, ensuring project persistence even across sandbox destructions.
+
+**Key packages:** `@aws-sdk/client-s3`, `chokidar`, `dotenv`
+
+---
+
+### 4.9 Frontend
 
 | Field | Value |
 |---|---|
 | **Directory** | `frontend/` |
 | **Stack** | React 19, Vite 8, Tailwind CSS 4, `@xterm/xterm` 6 + addon-fit, `socket.io-client` 4 |
-| **Serving** | Multi-stage Docker build (`node:22-alpine`) served by `nginx:1.27-alpine` with SPA fallback, gzip, immutable caching for `/assets/`, and a `/healthz` probe |
+| **Serving** | Multi-stage Docker build (`node:22-alpine`) served by `nginx:1.27-alpine` with SPA fallback, gzip, immutable caching for `/assets/`, and a `/healthz` probe (or `Dockerfile.dev` with Vite for local dev) |
 
 | Component | Description |
 |---|---|
-| `LandingScreen` | Entry point; starts a sandbox |
+| `LandingScreen` | Entry point; starts a new sandbox or opens existing projects from the dashboard |
 | `LoadingScreen` | Shown while the pod boots |
 | `IDELayout` | Overall workspace layout |
 | `FileExplorer` | Tree view of workspace files |
 | `CodeEditor` | Code viewer for the selected file |
-| `PreviewPane` | iframe showing `<id>.preview.localhost` |
+| `PreviewPane` | iframe showing `<id>.preview.localtest.me` |
 | `TerminalPane` | xterm.js terminal connected to the agent over Socket.IO |
 | `ChatPanel` | AI chat with model dropdown and SSE streaming |
 | `ToolActivityChip` | Shows live file activity from the agent |
@@ -347,17 +369,17 @@ sequenceDiagram
     participant K8S as Kubernetes API
     participant RD as Redis
 
-    User->>FE: Click "Create Sandbox"
+    User->>FE: Click "New Project" or open existing
     FE->>ING: POST /api/sandbox/start
     ING->>SB: route to sandbox-service
     SB->>SB: Generate UUID → sandboxId
     par K8s + Redis
         SB->>K8S: create Pod (sandbox-pod-{id})
         SB->>K8S: create Service (sandbox-service-{id})
-        SB->>RD: SET sandbox:{id} EX 120
+        SB->>RD: SET sandbox:{id} EX 1200
     end
     SB-->>FE: 201 { sandboxId, previewUrl }
-    FE->>FE: Save session, render IDE
+    FE->>FE: Save session, poll agent, render IDE
 ```
 
 ### 5.2 Pod Specification
@@ -365,8 +387,9 @@ sequenceDiagram
 - **Init container:** runs the `template` image and copies `/workspace` into a shared `emptyDir` volume.
 - **`template` container:** runs the Vite dev server on port 5173.
 - **`agent` container:** runs the file API and PTY server on port 3000.
+- **`sync-agent` container:** runs the S3 sync watcher on port 4000.
 
-Both main containers mount the same `emptyDir` volume. A file written by the agent is immediately visible to Vite's watcher, which triggers HMR.
+All containers mount the same `emptyDir` volume. A file written by the agent is immediately visible to Vite's watcher (triggering HMR) and to `sync-agent` (triggering S3 sync).
 
 ### 5.3 Per-Sandbox Service
 
@@ -381,10 +404,10 @@ type: ClusterIP
 
 ### 5.4 TTL & Cleanup
 
-1. On creation, `sandbox:{id}` is stored in Redis with a 120-second TTL.
+1. On creation, `sandbox:{id}` is stored in Redis with a 1200-second (20 minutes) TTL.
 2. Every request through the router refreshes the TTL, so active sessions stay alive.
 3. The sandbox server subscribes to `__keyevent@0__:expired`. When a key expires, it deletes the pod and service.
-4. Storage is an `emptyDir`, so all workspace data is destroyed with the pod.
+4. Workspace files remain safely backed up in AWS S3 and project metadata in MongoDB.
 
 ---
 
@@ -429,7 +452,7 @@ The agent uses a `MemorySaver` checkpointer. If a provider returns `429`, the se
 
 ### 6.5 Hot Reload
 
-Writes land on the shared volume. Vite's watcher detects the change and pushes an HMR update over `ws://{id}.preview.localhost`, so the preview iframe updates without a full reload.
+Writes land on the shared volume. Vite's watcher detects the change and pushes an HMR update over `ws://{id}.preview.localtest.me`, so the preview iframe updates without a full reload.
 
 ### 6.6 Error Handling
 
@@ -461,14 +484,44 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 ```
 
-### 7.2 Sandbox State (Redis)
+### 7.2 Project (MongoDB, `sandbox` database)
+
+| Field | Type | Constraints |
+|---|---|---|
+| `_id` | `ObjectId` | PK |
+| `user` | `ObjectId` | required, references User |
+| `title` | `String` | default: `"Untitled Project"` |
+
+```javascript
+const projectSchema = new mongoose.Schema({
+  user:  { type: mongoose.Schema.Types.ObjectId, required: true },
+  title: { type: String, default: "Untitled Project" }
+});
+```
+
+### 7.3 HistoryEvent (MongoDB, `ai` database)
+
+Stores multi-turn conversational chat messages and tool activity across project sessions.
+
+| Field | Type | Description |
+|---|---|---|
+| `projectId` | `String` | Sandbox / Project ID (indexed) |
+| `eventId` | `String` | Unique event identifier |
+| `type` | `String` | `'user'`, `'tool'`, `'assistant'`, `'rate_limit'` |
+| `tool` | `String` | Tool name (e.g. `'list_files'`, `'read_files'`, `'update_files'`) |
+| `status` | `String` | Execution status |
+| `message` | `String` | User or activity display string |
+| `paths` | `[String]` | Files affected |
+| `content` | `String` | Assistant text response or user prompt |
+| `createdAt` | `Date` | Timestamp |
+
+### 7.4 Sandbox State (Redis)
 
 - **Key:** `sandbox:{sandboxId}`
 - **Value:** `{ "status": "active" }`
-- **TTL:** 120 seconds, refreshed by the router
-- There is currently no persistent sandbox record in MongoDB.
+- **TTL:** 1200 seconds (20 minutes), refreshed by the router on each request
 
-### 7.3 Queue Payload
+### 7.5 Queue Payload
 
 **Queue:** `auth_notification_queue` (durable)
 
@@ -488,13 +541,13 @@ const userSchema = new mongoose.Schema({
 | Deployment | Image | Notes |
 |---|---|---|
 | `auth-deployment` | `auth` | Google OAuth + JWT |
-| `ai-deployment` | `ai-orchestration` | LangGraph agent |
+| `ai-deployment` | `ai-orchestration` | LangGraph agent + MongoDB checkpointer |
 | `sandbox-deployment` | `sandbox` | Uses `resource-manager` service account |
-| `router-deployment` | `router` | Host-based proxy |
+| `router-deployment` | `router` | Host-based proxy with CORS handling |
 | `notification-deployment` | `notification` | RabbitMQ consumer |
-| `frontend-deployment` | `syncspace-frontend` | nginx serving the React build; Ingress catch-all |
+| `frontend-deployment` | `frontend` | Vite dev / nginx serving the React SPA; Ingress catch-all |
 
-Dynamic pods (one per sandbox) run the `template` and `agent` images.
+Dynamic pods (one per sandbox) run the `template`, `agent`, and `sync-agent` images.
 
 ### 8.2 Services
 
@@ -505,12 +558,12 @@ Dynamic pods (one per sandbox) run the `template` and `agent` images.
 | `sandbox-service` | ClusterIP | 80 → 3000 |
 | `router-service` | ClusterIP | 80 → 3000 |
 | `notification-service` | ClusterIP | 80 → 4000 |
-| `frontend-service` | ClusterIP | 80 |
+| `frontend-service` | ClusterIP | 80 → 5173 |
 | `sandbox-service-{id}` | ClusterIP | 80 → 5173, 3000 → 3000 |
 
 ### 8.3 Ingress
 
-An nginx Ingress routes `/api/auth`, `/api/sandbox`, and `/api/ai` to their services, `*.preview.localhost` and `*.agent.localhost` to the router, and everything else to the frontend. It is tuned for streaming: response buffering off, cookie-based session affinity, and long proxy timeouts for SSE and WebSockets.
+An nginx Ingress routes `/api/auth`, `/api/sandbox`, and `/api/ai` to their services, `*.preview.localtest.me` and `*.agent.localtest.me` to the router, and everything else to the frontend. It is tuned for streaming: response buffering off, cookie-based session affinity, and long proxy timeouts for SSE and WebSockets.
 
 ### 8.4 RBAC
 
@@ -518,11 +571,12 @@ A `resource-manager` ServiceAccount, Role, and RoleBinding allow the sandbox ser
 
 ### 8.5 Secrets
 
-Sensitive values (database URLs, JWT secret, Google credentials, model API keys) are stored in Kubernetes `Opaque` Secrets and injected through `secretKeyRef`. Never commit real values; see [Security Considerations](#13-security-considerations).
+Sensitive values (database URLs, JWT secret, Google credentials, model API keys, AWS credentials) are stored in Kubernetes `Opaque` Secrets and injected through `secretKeyRef`.
 
-### 8.6 Storage
+### 8.6 Storage & Persistence
 
-There are no PersistentVolumeClaims. Sandboxes use `emptyDir` volumes, which are ephemeral by design.
+- Inside the pod, the containers mount a shared `emptyDir` volume for high-speed local filesystem operations and Vite HMR.
+- Long-term persistence is achieved via the `sync-agent` sidecar, which streams changes to **AWS S3** (`syncspace-bucket`) and restores existing project files upon pod creation. Project metadata is stored in **MongoDB**.
 
 ---
 
@@ -554,7 +608,7 @@ minikube addons enable ingress
 # 3. Build images inside the cluster's Docker daemon
 eval $(minikube docker-env)
 
-# 4. Create secrets from a local, git-ignored file
+# 4. Create secrets from template or configure individual secret files in k8s/
 cp k8s/secrets.example.yml k8s/secrets.local.yml   # fill in your own values
 kubectl apply -f k8s/secrets.local.yml
 
@@ -565,7 +619,7 @@ kubectl apply -f k8s/rbac.yml
 skaffold dev
 ```
 
-Skaffold builds the service images (`ai-orchestration`, `agent`, `router`, `sandbox`, `template`, plus the others defined in `skaffold.yml`) and applies the manifests in `k8s/`.
+Skaffold builds the service images (`ai-orchestration`, `agent`, `sync-agent`, `router`, `sandbox`, `template`, `auth`, `notification`, `frontend`) and applies the manifests in `k8s/`.
 
 ### 9.3 Frontend Dev Server
 
@@ -575,11 +629,11 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-In development, Vite proxies `/api`, `/agent-proxy/<id>`, and `/preview-proxy/<id>` to the cluster ingress on `localhost:8080`, rewriting the `Host` header to `<id>.agent.localhost` or `<id>.preview.localhost`. The terminal connects straight to `http://<id>.agent.localhost` through `getAgentSocketUrl`.
+In development, Vite proxies `/api`, `/agent-proxy/<id>`, and `/preview-proxy/<id>` to the cluster ingress on `localhost:80`, rewriting the `Host` header to `<id>.agent.localtest.me` or `<id>.preview.localtest.me`. The terminal connects straight to `http://<id>.agent.localtest.me` through `getAgentSocketUrl`.
 
 ### 9.4 Wildcard DNS
 
-Sandbox previews need `*.localhost` subdomains to resolve to your cluster entry point. Most browsers resolve `*.localhost` to loopback automatically. If yours does not, use `dnsmasq` or add entries to `/etc/hosts`.
+SyncSpace uses the `*.localtest.me` wildcard domain for sandbox previews and agent endpoints (`<id>.preview.localtest.me` and `<id>.agent.localtest.me`). Public DNS resolvers automatically map all `*.localtest.me` domains to `127.0.0.1` (loopback), requiring zero manual DNS setup or `/etc/hosts` changes.
 
 ### 9.5 Running a Single Service
 
@@ -588,21 +642,25 @@ cd auth && npm install && npm run dev            # port 3000
 cd ai-orchestration && npm install && npm run dev # port 3000
 cd notification && npm install && npm run dev     # port 4000
 cd sandbox/server && npm install && npm run dev   # needs a valid kubeconfig
-cd sandbox/router && npm install && npm run dev
-cd sandbox/agent && npm install && npm run dev    # needs node-pty build tools
+cd sandbox/router && npm install && npm run dev   # port 3000
+cd sandbox/agent && npm install && npm run dev    # port 3000
+cd sandbox/sync-agent && npm install && node sync.js
 ```
 
 ### 9.6 Try a Sandbox from the Command Line
 
 ```bash
-curl -X POST http://localhost:8080/api/sandbox/start
-# { "sandboxId": "...", "previewUrl": "http://<id>.preview.localhost" }
+# Start a sandbox
+curl -X POST http://localhost/api/sandbox/start
+# { "sandboxId": "...", "previewUrl": "http://<id>.preview.localtest.me" }
 
-curl "http://<id>.agent.localhost/list-files"
+# List files
+curl "http://<id>.agent.localtest.me/list-files"
 
-curl -X PATCH http://<id>.agent.localhost/update-files \
+# Update files
+curl -X PATCH http://<id>.agent.localtest.me/update-files \
   -H "Content-Type: application/json" \
-  -d '{"updates":[{"file":"src/App.jsx","content":"export default () => <h1>Hello</h1>"}]}'
+  -d '{"files":[{"file":"src/App.jsx","content":"export default () => <h1>Hello SyncSpace</h1>"}]}'
 ```
 
 ---
@@ -613,11 +671,11 @@ curl -X PATCH http://<id>.agent.localhost/update-files \
 
 | Variable | Description | Required |
 |---|---|---|
-| `AUTH_MONGO_URI` | MongoDB connection string | Yes |
+| `AUTH_MONGO_URI` / `AUTH` | MongoDB connection string | Yes |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | Yes |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Yes |
 | `GOOGLE_CALLBACK_URL` | OAuth callback URL | Yes |
-| `JWT_SECRET` | Secret for signing JWTs (use a long random value) | Yes |
+| `JWT_SECRET` | Secret for signing JWTs (min 32 characters) | Yes |
 | `FRONTEND_URL` | Where to redirect after login | Yes |
 | `COOKIE_DOMAIN` | Optional cookie domain | No |
 | `RABBITMQ_URL` | AMQP connection URL | Yes |
@@ -626,9 +684,10 @@ curl -X PATCH http://<id>.agent.localhost/update-files \
 
 | Variable | Description | Required |
 |---|---|---|
+| `MONGODB_URI` | MongoDB connection for checkpointer & history | Recommended |
 | `GROQ_API_KEY` | Groq API key | For Groq models |
+| `GEMINI_API_KEY` | Google Gemini API key | For Gemini models |
 | `MISTRAL_API_KEY` | Mistral API key | For Mistral models |
-| `GEMINI_API_KEY` | Gemini API key | For Gemini models |
 
 ### Notification Service
 
@@ -644,6 +703,17 @@ curl -X PATCH http://<id>.agent.localhost/update-files \
 | Variable | Description | Required |
 |---|---|---|
 | `REDIS_URL` | Redis URL (`redis://` or `rediss://`) | Yes |
+| `SANDBOX` | MongoDB connection string for Project metadata | Yes |
+| `JWT_SECRET` | Secret for verifying auth cookies on sandbox endpoints | Yes |
+
+### Sync Agent (AWS S3)
+
+| Variable | Description | Required |
+|---|---|---|
+| `PROJECT_ID` | Unique project identifier | Injected by Pod spec |
+| `AWS_ACCESS_KEY_ID` | AWS IAM access key ID | Yes |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret access key | Yes |
+| `AWS_REGION` | AWS S3 bucket region (e.g. `ap-south-1`) | Yes |
 
 ### Sandbox Agent
 
@@ -666,27 +736,33 @@ curl -X PATCH http://<id>.agent.localhost/update-files \
 
 ### 11.2 Sandbox Server (`/api/sandbox`)
 
-| Method | Endpoint | Response | Description |
-|---|---|---|---|
-| `POST` | `/api/sandbox/start` | `201 { message, sandboxId, previewUrl }` | Creates pod, service, and TTL key |
-| `GET` | `/api/sandbox/health` | `200` | Health check |
+All `/api/sandbox` endpoints verify user JWT authentication via `token` cookie or `Authorization: Bearer <token>`.
+
+| Method | Endpoint | Request Body | Response | Description |
+|---|---|---|---|---|
+| `POST` | `/api/sandbox/project` | `{ title: string }` | `201 { message, project }` | Creates a new user project in MongoDB |
+| `GET` | `/api/sandbox/project` | none | `200 { message, projects }` | Lists all projects owned by the authenticated user |
+| `POST` | `/api/sandbox/start` | `{ projectId?: string, title?: string }` | `201 { message, sandboxId, previewUrl }` | Provisions pod, service, S3 sync, and TTL key |
+| `GET` | `/api/sandbox/health` | none | `200` | Health check |
 
 ### 11.3 AI Orchestration (`/api/ai`)
 
-| Method | Endpoint | Body | Response |
-|---|---|---|---|
-| `GET` | `/api/ai/models` | none | List of available models |
-| `POST` | `/api/ai/invoke` | `{ message, projectId, model }` | `text/event-stream` |
+| Method | Endpoint | Request Body | Response | Description |
+|---|---|---|---|---|
+| `GET` | `/api/ai/models` | none | `{ models: [...], default: string }` | List of available models whose API keys are configured |
+| `POST` | `/api/ai/invoke` | `{ message, projectId, model? }` | `text/event-stream` | Streams tool activity and AI assistant response |
+| `GET` | `/api/ai/history/:projectId` | none | `{ history: [...] }` | Retrieves saved conversation and tool event history |
+| `DELETE` | `/api/ai/history/:projectId` | none | `{ success: true }` | Clears conversation history and LangGraph checkpoints |
 
-### 11.4 Sandbox Agent (`{id}.agent.localhost`)
+### 11.4 Sandbox Agent (`{id}.agent.localtest.me`)
 
-| Method | Endpoint | Request | Description |
+| Method | Endpoint | Request Body / Query | Description |
 |---|---|---|---|
 | `GET` | `/list-files` | none | Lists workspace files (excludes `node_modules`, `.git`, `dist`) |
 | `GET` | `/read-files` | `?files=a,b` | Reads file contents |
-| `PATCH` | `/update-files` | `{ updates: [{ file, content }] }` | Writes or overwrites files |
-| `POST` | `/create-files` | `{ files: [{ file, content }] }` | Creates new files |
-| `GET` | `/` | none | Health check |
+| `PATCH` | `/update-files` | `{ files: [...] }` or `{ updates: [...] }` | Writes or overwrites workspace files |
+| `POST` | `/create-files` | `{ files: [...] }` | Creates new workspace files |
+| `GET` | `/` | none | Health check with CORS headers |
 
 **Socket.IO:** `terminal-input` (client → server) and `terminal-output` (server → client).
 
@@ -713,7 +789,7 @@ flowchart LR
 | Stage | Tool |
 |---|---|
 | Lint | ESLint (`npm run lint`) |
-| Test | Vitest / Jest (to be added) |
+| Test | Vitest / Jest |
 | Build | Docker Buildx, tagged with git SHA |
 | Push | GHCR or Docker Hub |
 | Deploy | `kubectl apply` or ArgoCD |
@@ -724,7 +800,7 @@ flowchart LR
 
 ### 13.1 Sandbox Isolation
 
-- Each sandbox runs in its own pod with CPU and memory limits.
+- Each sandbox runs in its own pod with calibrated CPU and memory limits.
 - Each per-sandbox Service selects on a unique `sandboxId`, so traffic cannot cross sandboxes.
 - Workspace storage is an `emptyDir` with no host mount.
 - File paths in the agent API are joined under `/workspace` to block traversal.
@@ -732,20 +808,22 @@ flowchart LR
 ### 13.2 Authentication
 
 - Google OAuth 2.0 with a short-lived JWT in an `httpOnly` cookie.
-- The sandbox server needs only pod and service permissions, following least privilege.
+- The sandbox server validates the user JWT before creating or listing projects and provisioning pods.
+- The sandbox server ServiceAccount (`resource-manager`) follows least privilege (only pods and services in `default`).
 
 ### 13.3 Secrets
 
-Keep real credentials out of git. If any secret has ever been committed, rotate it and remove it from history, then move to Sealed Secrets, External Secrets Operator, or SOPS.
+Keep real credentials out of git. All secret files in `k8s/` and `.env` are git-ignored. Use `k8s/secrets.example.yml` as a template for local development.
 
 ### 13.4 Hardening Checklist
 
-- Enforce JWT verification on `/api/sandbox/start` and `/api/ai/invoke`.
-- Add a shared-secret check on the sandbox agent API.
-- Add `securityContext` to sandbox containers (`runAsNonRoot`, `allowPrivilegeEscalation: false`).
-- Add NetworkPolicies so sandbox pods only accept traffic from the router and AI service.
-- Add rate limiting on AI and sandbox-creation endpoints.
-- Use TLS at the Ingress and strict CORS.
+- [x] Enforce JWT verification on `/api/sandbox/project` and `/api/sandbox/start`.
+- [ ] Enforce JWT verification on `/api/ai/invoke`.
+- [ ] Add a shared-secret check on the sandbox agent API.
+- [ ] Add `securityContext` to sandbox containers (`runAsNonRoot`, `allowPrivilegeEscalation: false`).
+- [ ] Add NetworkPolicies so sandbox pods only accept traffic from the router and AI service.
+- [ ] Add rate limiting on AI and sandbox-creation endpoints.
+- [ ] Use TLS at the Ingress for production.
 
 ---
 
@@ -763,29 +841,29 @@ Keep real credentials out of git. If any secret has ever been committed, rotate 
 
 | Limitation | Impact |
 |---|---|
-| No authentication enforced on sandbox and AI endpoints | Unauthenticated clients could create sandboxes or call the AI |
-| Sandbox pods have no `securityContext` | Containers run as root |
-| No rate limiting | Possible resource exhaustion |
+| No authentication enforced on AI invoke endpoint | Anyone can trigger AI generation for a known `projectId` |
+| Sandbox pods have no `securityContext` | Containers run as root inside the pod namespace |
+| No rate limiting | Possible cluster or LLM token exhaustion |
 | Services run `nodemon` in their container `CMD` | Dev tooling in images; use `node server.js` for production |
-| No automated tests | Regressions are caught manually |
-| No persistent sandbox storage | A session cannot be resumed after the TTL expires |
-| No cross-session AI memory | Each invoke starts a fresh agent run |
-| Single shared shell per sandbox | Multiple terminal clients share one session |
+| Single shared shell per sandbox | Multiple terminal clients in the same sandbox share one PTY session |
 
-### 15.2 Planned Features
+### 15.2 Feature Status
 
-| Feature | Priority |
-|---|---|
-| JWT enforcement on sandbox and AI endpoints | High |
-| Persistent project storage (PVC or object storage) | High |
-| Project management (create, list, reopen projects) | High |
-| Role-based access control | Medium |
-| Multi-turn AI conversation history | Medium |
-| AI edit history and undo | Medium |
-| Real-time multi-user collaboration | Medium |
-| Multi-language sandbox templates (Node, Python, Next.js) | Medium |
-| Observability stack (metrics, tracing, alerts) | Medium |
-| Stronger resource isolation for sandboxes | Low |
+| Feature | Status | Notes |
+|---|---|---|
+| Google OAuth & JWT Authentication | **Completed** | Passport.js + `httpOnly` cookie |
+| Ephemeral Sandbox Pods | **Completed** | Multi-container pods on Kubernetes |
+| Subdomain Ingress & Proxy Router | **Completed** | Host-based routing via `*.localtest.me` |
+| Persistent Project Dashboard | **Completed** | MongoDB Project collection + UI |
+| Persistent S3 Storage Sync | **Completed** | Chokidar watcher + AWS S3 sync agent |
+| Multi-Model AI Agent | **Completed** | Groq, Gemini Flash, Mistral Small |
+| Multi-Turn AI Conversation History | **Completed** | MongoDBSaver + `HistoryEvent` model |
+| SSE Streaming & Tool Activity Chips | **Completed** | Server-Sent Events with LangGraph |
+| PTY Terminal via Socket.IO | **Completed** | `node-pty` + xterm.js |
+| Rate-limit Resilience (429 backoff) | **Completed** | LangGraph checkpoint resumption |
+| AI edit history and undo | Planned (Medium) | Versioning snapshots in S3/Git |
+| Real-time multi-user collaboration | Planned (Medium) | CRDTs / Yjs over WebSocket |
+| Multi-language sandbox templates | Planned (Medium) | Node.js, Python, Next.js starters |
 
 ---
 
