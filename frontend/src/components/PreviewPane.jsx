@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSandbox } from '../context/SandboxContext.jsx';
 import { waitForPreview } from '../services/api.js';
 import { getPreviewUrl } from '../config.js';
+import PreviewButton from './PreviewButton.jsx';
 
 /**
  * Live preview iframe showing the sandbox's Vite dev server.
@@ -106,6 +107,7 @@ export default function PreviewPane({ refreshTrigger = 0 }) {
         >
           {previewUrl}
         </div>
+        <PreviewButton key={sandboxId} sandboxId={sandboxId} previewUrl={previewUrl} />
       </div>
 
       {/* Iframe */}
@@ -144,7 +146,7 @@ export default function PreviewPane({ refreshTrigger = 0 }) {
         {!warming && (
           <iframe
             key={refreshKey}
-            src={getPreviewUrl(sandboxId)}
+            src={previewUrl || getPreviewUrl(sandboxId)}
             className="w-full h-full border-0"
             style={{ backgroundColor: '#fff', display: warmupError ? 'none' : 'block' }}
             title="Live Preview"

@@ -50,6 +50,9 @@ spec:
               secretKeyRef:
                 name:  database
                 key:  SANDBOX
+
+          - name: PREVIEW_DOMAIN
+            value: "preview.localtest.me"
         readinessProbe:
           httpGet:
             path: /api/sandbox/health

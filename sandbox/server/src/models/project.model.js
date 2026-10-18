@@ -8,8 +8,12 @@ const projectSchema = new mongoose.Schema({
     title: {
         type: String,
         default: "Untitled Project"
+    },
+    sandboxId: {
+        type: String,
+        default: null
     }
-});
+}, { timestamps: true });
 
 const Project = mongoose.model('project', projectSchema);
 

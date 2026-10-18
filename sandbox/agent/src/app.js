@@ -32,6 +32,56 @@ const io = new Server(httpServer, {
 
 
 const shell = process.env.SHELL || 'bash';
+const sandboxId = process.env.SANDBOX_ID || (os.hostname() || '').replace(/^sandbox-pod-/, '');
+
+// Dev server reachability detection
+let isDevServerReady = false;
+
+function checkDevServer(port = 5173, host = '127.0.0.1', timeout = 1000) {
+    return new Promise((resolve) => {
+        const req = http.request({
+            method: 'HEAD',
+            host,
+            port,
+            path: '/',
+            timeout,
+        }, (res) => {
+            resolve(true);
+        });
+
+        req.on('timeout', () => {
+            req.destroy();
+            resolve(false);
+        });
+
+        req.on('error', () => {
+            resolve(false);
+        });
+
+        req.end();
+    });
+}
+
+async function monitorDevServer() {
+    try {
+        const reachable = await checkDevServer();
+        if (reachable && !isDevServerReady) {
+            isDevServerReady = true;
+            console.log(`Dev server is reachable on port 5173. Emitting preview:ready for sandbox ${sandboxId}`);
+            io.emit('preview:ready', { sandboxId });
+        } else if (!reachable && isDevServerReady) {
+            isDevServerReady = false;
+            console.log(`Dev server became unreachable on port 5173. Emitting preview:reset for sandbox ${sandboxId}`);
+            io.emit('preview:reset', { sandboxId });
+        }
+    } catch (err) {
+        // Suppress probe errors
+    }
+}
+
+// Start monitoring dev server immediately and every 1000ms
+monitorDevServer();
+setInterval(monitorDevServer, 1000);
 
 // Output buffer to preserve recent terminal output for new client connections
 const MAX_BUFFER_SIZE = 64 * 1024; // 64 KB
@@ -92,6 +142,11 @@ io.on("connection", (socket) => {
     // Replay terminal buffer to newly connected client
     if (outputBuffer) {
         socket.emit("terminal-output", outputBuffer);
+    }
+
+    // Notify newly connected client if dev server is already ready
+    if (isDevServerReady) {
+        socket.emit("preview:ready", { sandboxId });
     }
 
     socket.on("terminal-input", (data) => {

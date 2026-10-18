@@ -42,7 +42,10 @@ spec:
             valueFrom:
               secretKeyRef:
                 name: database
-                key:  REDIS_URL    
+                key:  REDIS_URL
+
+          - name: PREVIEW_DOMAIN
+            value: "preview.localtest.me"    
         ports:
         - containerPort:  3000
           name:  my-name

@@ -100,18 +100,46 @@ wsProxy.on('error', (err, req, socket) => {
 });
 
 
+function parseRoute(host) {
+    if (!host) return null;
+    const hostname = host.split(':')[0].toLowerCase();
+    const parts = hostname.split('.');
+    const sandboxId = parts[0];
+
+    const previewDomain = process.env.PREVIEW_DOMAIN || 'preview.localtest.me';
+    const cleanPreviewDomain = previewDomain.replace(/^https?:\/\//, '').split(':')[0].toLowerCase();
+
+    if (parts[1] === 'agent') {
+        return { sandboxId, type: 'agent' };
+    }
+
+    if (parts[1] === 'preview') {
+        return { sandboxId, type: 'preview' };
+    }
+
+    if (hostname === `${sandboxId}.${cleanPreviewDomain}` || hostname.endsWith(`.${cleanPreviewDomain}`)) {
+        return { sandboxId, type: 'preview' };
+    }
+
+    if (parts.length === 2 && parts[1] !== 'agent') {
+        return { sandboxId, type: 'preview' };
+    }
+
+    return null;
+}
+
 app.use(async (req, res, next) => {
     const host = req.headers.host;
     if (!host) {
         return res.status(400).json({ error: "Missing Host header" });
     }
 
-    const hostname = host.split(':')[0];
-    const parts = hostname.split('.');
-    const sandboxId = parts[0];
-    const type = parts[1];
+    const route = parseRoute(host);
+    if (!route) {
+        return res.status(404).json({ error: `Unknown routing target for host: ${host}` });
+    }
 
-    console.log(`WS upgrade request: ${host}, sandboxId: ${sandboxId}, type: ${type}`);
+    const { sandboxId, type } = route;
 
     try {
         await refreshTTL(sandboxId);
@@ -140,18 +168,21 @@ server.on('upgrade', (req, socket, head) => {
     // during the active piped session (after ws() Promise has resolved)
     socket.on('error', () => socket.destroy());
 
-    const hostname = host.split(':')[0];
-    const parts = hostname.split('.');
-    const sandboxId = parts[0];
-    const type = parts[1];
+    const route = parseRoute(host);
+    if (!route) {
+        console.warn(`Unknown WS routing target for host: ${host}`);
+        socket.destroy();
+        return;
+    }
 
+    const { sandboxId, type } = route;
     console.log(`WS upgrade request: ${host}, sandboxId: ${sandboxId}, type: ${type}`);
 
     if (type === 'agent') {
         wsProxy.ws(req, socket, { target: `http://sandbox-service-${sandboxId}:3000` }, head)
             .catch(() => socket.destroy());
     } else if (type === 'preview') {
-        wsProxy.ws(req, socket, { target: `http://sandbox-service-${sandboxId}` }, head)
+        wsProxy.ws(req, socket, { target: `http://sandbox-service-${sandboxId}:80` }, head)
             .catch(() => socket.destroy());
     } else {
         socket.destroy();

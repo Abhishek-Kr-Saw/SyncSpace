@@ -63,6 +63,12 @@ export async function createPod(sandboxId, projectId){
                             name: "workspace-volume",
                             mountPath: '/workspace'
                         }
+                    ],
+                    env: [
+                        {
+                            name: "SANDBOX_ID",
+                            value: sandboxId
+                        }
                     ]
                 },
                 {

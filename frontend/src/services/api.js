@@ -150,6 +150,22 @@ export async function waitForPreview(sandboxId, { timeoutMs = 90000, signal } = 
   throw lastError || new Error('Preview did not become ready in time');
 }
 
+/** Check whether the sandbox dev server is ready via GET /api/sandbox/:id/preview-status. */
+export async function checkPreviewStatus(sandboxId, { signal } = {}) {
+  try {
+    const res = await fetch(`${API_BASE}/sandbox/${sandboxId}/preview-status`, {
+      method: 'GET',
+      credentials: 'include',
+      signal,
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Boolean(data?.ready);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * List all files in the sandbox project.
  * @param {string} sandboxId
