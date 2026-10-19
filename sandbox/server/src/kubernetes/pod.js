@@ -23,7 +23,7 @@ export async function createPod(sandboxId, projectId){
                     name: "init-container",
                     image: "template",
                     imagePullPolicy: "IfNotPresent",
-                    command : ['sh',"-c","cp -r /workspace/. /seed/"],
+                    command : ['sh',"-c","cp -r /workspace/. /seed/ && chmod -R 777 /seed"],
                     volumeMounts: [
                         {
                             name: "workspace-volume",
